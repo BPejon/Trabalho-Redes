@@ -107,10 +107,7 @@
 				{
 					n = write(sockfd,"Conversa Terminada X.X\n",23);
                     //Envia para o processo pai sua morte
-
-
-
-					exit(0);
+					exit(2);
 				}
 
 				n = write(sockfd,buffer,sizeof(buffer));
@@ -119,8 +116,6 @@
 					printf("Erro ao escrever mensagem, terminando chatroom\n");
 					exit(1);
 				}
-
-                //PPID armazena id do
 			}
 
 
@@ -135,14 +130,13 @@
 			{
 				bzero(buffer2,sizeof(buffer));
 				n = read(sockfd,buffer2,sizeof(buffer)); //lemos do buffer,
+
+                //Caso o cliente quiser sair da conversa
                 int pidfilho, status;
                     pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
                     if(pidfilho < 0){
-                        perror("waitpid");
+                        perror("waitpid\n");
                     }
-                
-                       printf("%d\n", pidfilho);
-                      printf(" status %d\n", status);
                     if(pidfilho > 0){
                       exit(0);
                     }
@@ -159,58 +153,19 @@
                 if(strcmp(buffer2,empty) == 0)
                 {   
 
-
-
-                    int pidfilho, status;
-                    pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
-                    if(pidfilho < 0){
-                        perror("waitpid");
-                    }
-                
-                       printf("%d\n", pidfilho);
-                      printf(" status %d\n", status);
-                    if(pidfilho > 0){
-                      exit(0);
-                    }
-
                 }
 
                 //se o outro lado pediu para terminar a conversa, para ter certeza, terminamos aqui.
                 else if(strcmp(buffer2,"Conversa Terminada X.X\n") == 0){
-                    printf("O outro usuario terminou a conversa.\n Saindo...\n");
+                    printf(" O outro usuario terminou a conversa.\n Saindo...\n");
                     kill(pid, SIGTERM); //mata processo filho
                     exit(0);
                 }
 
                
-                else
-                {
+                else{
                     printf(">%s",buffer2);
 
-                    int pidfilho, status;
-                    pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
-                    if(pidfilho < 0){
-                        perror("waitpid");
-                    }
-                
-                       printf("%d\n", pidfilho);
-                      printf(" status %d\n", status);
-                    if(pidfilho > 0){
-                      exit(0);
-                    }
-
-                //caso o processo filho terminar/
-                /*else if(1){
-                    int pidfilho, status;
-                    pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
-                    if(pidfilho < 0){
-                        perror("waitpid");
-                    }
-                    else if(pidfilho == 0){
-                        printf("%d", pidfilho);
-                        break;
-                    }
-                }*/
                 }          
 
 			}
