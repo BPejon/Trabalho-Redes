@@ -9,6 +9,7 @@
 	#include <sys/wait.h>
     #include <netdb.h>
     #include <errno.h>
+    #include "readline.h"
 
     void error(char* msg)
     {
@@ -33,7 +34,7 @@
         */
        struct hostent *server;
 
-       char buffer[4096];
+       char *input, buffer[4097];
        
        //tambem estamos usando args aqui, essa vez 2 deles
        if(argc < 3)
@@ -82,40 +83,48 @@
             perror("Fork falhou\n");
         }
 
-        char* sair = "/sair\n";
+        char* sair = "/sair";
 
         //programa filho
         //responsável por enviar as mensagens
-        if(pid == 0){
-            
+        if(pid == 0)
+		{
 
 			while(1){
-				bzero(buffer,sizeof(buffer));
 				
                 //criamos input
-                fgets(buffer,4096,stdin);
+                input = read_line();
+
                 char* empty = "";
                 //se nao foi nada, nada faremos
-                if(strcmp(buffer,empty) == 0)
+                if(strcmp(input,empty) == 0)
                 {
                 
                 }
 
-            
                 //se acabou a conversa
-				if(strcmp(sair,buffer) == 0) 
+				if(strcmp(sair,input) == 0)
 				{
+                    //printf("entrou\n");
 					n = write(sockfd,"Conversa Terminada X.X\n",23);
                     //Envia para o processo pai sua morte
 					exit(2);
 				}
 
-				n = write(sockfd,buffer,sizeof(buffer));
+                for(int i = 0; i <= (strlen(input)/4096); i++)
+                {
+                    bzero(buffer,sizeof(buffer));
+                    strcpy(buffer, input + (i * 4097));
+                    //printf("%d", strcmp(sair,buffer));
+                    n = write(sockfd,buffer,sizeof(buffer));
+                }
+
 				if(n < 0)
 				{
 					printf("Erro ao escrever mensagem, terminando chatroom\n");
 					exit(1);
 				}
+
 			}
 
 
@@ -123,56 +132,55 @@
         
         //buffer de receber mensagens
         //programa pai
-        else{
+        else
+		{
 
-            char buffer2[4096];
+
+            char buffer2[4097];
+			//char *buffer2;
 			while (1)
 			{
-				bzero(buffer2,sizeof(buffer));
-				n = read(sockfd,buffer2,sizeof(buffer)); //lemos do buffer,
+				bzero(buffer2,sizeof(buffer2));
+				n = read(sockfd,buffer2,sizeof(buffer2) - 1); //lemos do buffer
+
 
                 //Caso o cliente quiser sair da conversa
                 int pidfilho, status;
-                    pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
-                    if(pidfilho < 0){
-                        perror("waitpid\n");
-                    }
-                    if(pidfilho > 0){
-                      exit(0);
-                    }
-
+                pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
+                if(pidfilho < 0){
+                    perror("waitpid\n");
+                }
+                if(pidfilho > 0){
+                    exit(0);
+                }
 
 				if(n < 0)
 				{
 					printf("Erro em receber mensagem, ou acabou a transmissao.\n Saindo...\n");
-                    kill(pid, SIGTERM);//mata processo filho
-					exit(1); 
+					kill(pid, SIGTERM);//mata processo filho
+                    exit(1);
 				}
-
                 char* empty = "";
                 if(strcmp(buffer2,empty) == 0)
-                {   
+                {
 
                 }
-
                 //se o outro lado pediu para terminar a conversa, para ter certeza, terminamos aqui.
-                else if(strcmp(buffer2,"Conversa Terminada X.X\n") == 0){
-                    printf(" O outro usuario terminou a conversa.\n Saindo...\n");
-                    kill(pid, SIGTERM); //mata processo filho
+                else if(strcmp(buffer2,"Conversa Terminada X.X\n") == 0)
+                {
+                    printf("O outro usuario terminou a conversa.\n Saindo...\n");
+                    kill(pid, SIGTERM);
                     exit(0);
                 }
-
-               
-                else{
-                    printf(">%s",buffer2);
-
-                }          
+                else
+                {
+                    printf(">%s\n",buffer2);
+                }        
 
 			}
 			
 			
 		}
-
 
 		wait(NULL);
 

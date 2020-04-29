@@ -15,6 +15,7 @@
 	#include <sys/socket.h> //definicao das structs para criar os sockets
 	#include <netinet/in.h> //contem constantes e structs para enderecos de internet
 	#include <sys/wait.h>
+	#include "readline.h"
 
 	//funcao para notificar erros 
 	void error(const char *msg)
@@ -31,7 +32,7 @@
 		int sockfd, newsockfd, portno, n; 
 		
 		//Os dados que vem do socket sao passados para um buffer, no nosso caso de 4096 chars (talvez eu tenha que alocar isso)
-		char buffer[4096];
+		char *input, buffer[4097];
 
 		//struckt sockaddr_in contem um endereco de internet, por enquanto temos apenas dois, um para o servidor e um para o cliente.
 		struct sockaddr_in serv_addr, cli_addr;
@@ -106,10 +107,10 @@
      		printf("Erro na conexao\n");
      		exit(1);
      	}
-		printf(">Conexao Estabelecida\n");
+		printf(">Conexao estabelecida\n");
      	//para mandar coisas para o cliente, usamos write
      	//colocamos o descritor de arquivo do socket, o buffer (nesse caso string) de conteudo e o tamanho.
-     	n = write(newsockfd,"Conexao Estabelecida\n",21);
+     	n = write(newsockfd,"Conexao estabelecida\n",21);
      	
      	//n guarda quantos caracteres foram mandados, se nao mandou nada = erro
      	if(n < 0)
@@ -127,30 +128,34 @@
 		}
 
 		//nesse caso, vamos colocar o escrever mensagens no child, nao acho que muda muito	
-		char* sair = "/sair\n";
+		char* sair = "/sair";
 		
-        //Processo filho
 		if(pid == 0)
 		{
 			while(1){
-				bzero(buffer,sizeof(buffer));
-
-				fgets(buffer,4096,stdin);
-                char* empty = "";
-                if(strcmp(buffer,empty) == 0)
-                {
-
-                }           
+				
+				input = read_line();
 				
 
-				if(strcmp(sair,buffer) == 0) //se acabou a conversa
+                char* empty = "";
+                if(strcmp(input,empty) == 0)
+                {
+
+                }
+
+				if(strcmp(sair,input) == 0) //se acabou a conversa
 				{
 					n = write(newsockfd,"Conversa Terminada X.X\n",23);
 					exit(2); //envia para o processo pai que terminou
 				}
 
+				for(int i = 0; i <= (strlen(input)/4096); i++)
+                {
+                    bzero(buffer,sizeof(buffer));
+                    strcpy(buffer, input + (i * 4097));
+                    n = write(newsockfd,buffer,sizeof(buffer));
+                }
 
-				n = write(newsockfd,buffer,sizeof(buffer));
 				if(n < 0)
 				{
 					printf("Erro ao escrever mensagem, terminando chatroom\n");
@@ -161,31 +166,31 @@
 
 		}
 		//recebendo mensagens e colocando na tela do terminal
-        //processo pai
 		else
 		{
-			char buffer2[4096];
+			char buffer2[4097];
+			//char *buffer2;
 			while (1)
 			{
-				bzero(buffer2,sizeof(buffer));
-				n = read(newsockfd,buffer2,sizeof(buffer2)); //lemos do buffer
-
-                //Caso o servidor queira sair da conversa
+				bzero(buffer2,sizeof(buffer2));
+				n = read(newsockfd,buffer2,sizeof(buffer2) - 1); //lemos do buffer
+				
+				//Caso o servidor queira sair da conversa
                 int pidfilho, status;
-                pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
-                if(pidfilho < 0){
-                    perror("waitpid\n");
-                }
-                if(pidfilho > 0){
+				pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
+				if(pidfilho < 0){
+					perror("waitpid\n");
+				}
+				if(pidfilho > 0){
                     exit(0);
                 }
-
-				if(n < 0){
-				    printf("Erro em receber mensagem, ou acabou a transmissao.\nSaindo...\n");
-                    kill(pid, SIGTERM); //mata processo filho
+				
+				if(n < 0)
+				{
+					printf("Erro em receber mensagem, ou acabou a transmissao.\nSaindo...\n");
+					kill(pid, SIGTERM); //mata processo filho
 					exit(1);
 				}
-
 				char* empty = "";
                 if(strcmp(buffer2,empty) == 0)
                 {
@@ -193,12 +198,12 @@
                 }
 				else if(strcmp(buffer2,"Conversa Terminada X.X\n") == 0)
                 {
-                    printf(" O outro usuario terminou a conversa\n Saindo...\n");
+                    printf("O outro usuario terminou a conversa\n Saindo...\n");
                     kill(pid, SIGTERM);//mata processo filho
                     exit(0);
                 }
                 else
-				printf(">%s",buffer2);
+				printf(">%s\n",buffer2);
 			}
 			
 			
