@@ -89,10 +89,6 @@
         //responsável por enviar as mensagens
         if(pid == 0)
 		{
-            //fechamos a parte de ler do 1
-            //close(pipefd1[0]);
-            //fehcamos a parte de escrever do 2
-            //close(pipefd2[1]);
 
 			while(1){
 				
@@ -106,6 +102,15 @@
                 
                 }
 
+                //se acabou a conversa
+				if(strcmp(sair,input) == 0)
+				{
+                    //printf("entrou\n");
+					n = write(sockfd,"Conversa Terminada X.X\n",23);
+                    //Envia para o processo pai sua morte
+					exit(2);
+				}
+
                 for(int i = 0; i <= (strlen(input)/4096); i++)
                 {
                     bzero(buffer,sizeof(buffer));
@@ -113,15 +118,6 @@
                     //printf("%d", strcmp(sair,buffer));
                     n = write(sockfd,buffer,sizeof(buffer));
                 }
-
-                //se acabou a conversa
-				if(strcmp(sair,buffer) == 0)
-				{
-                    //printf("entrou\n");
-					n = write(sockfd,"Conversa Terminada X.X\n",23);
-                    //Envia para o processo pai sua morte
-					exit(2);
-				}
 
 				if(n < 0)
 				{
@@ -160,10 +156,9 @@
 
 				if(n < 0)
 				{
-					printf("Erro em receber mensagem, ou acabou a transmissao, por favor escreva /sair para terminar o chat");
+					printf("Erro em receber mensagem, ou acabou a transmissao.\n Saindo...\n");
 					kill(pid, SIGTERM);//mata processo filho
                     exit(1);
-                    //break;
 				}
                 char* empty = "";
                 if(strcmp(buffer2,empty) == 0)
@@ -176,7 +171,6 @@
                     printf("O outro usuario terminou a conversa.\n Saindo...\n");
                     kill(pid, SIGTERM);
                     exit(0);
-                    //break;
                 }
                 else
                 {

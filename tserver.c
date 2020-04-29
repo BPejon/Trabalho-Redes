@@ -110,7 +110,7 @@
 		printf(">Conexao estabelecida\n");
      	//para mandar coisas para o cliente, usamos write
      	//colocamos o descritor de arquivo do socket, o buffer (nesse caso string) de conteudo e o tamanho.
-     	n = write(newsockfd,">Conexao estabelecida\n",21);
+     	n = write(newsockfd,"Conexao estabelecida\n",21);
      	
      	//n guarda quantos caracteres foram mandados, se nao mandou nada = erro
      	if(n < 0)
@@ -143,6 +143,12 @@
 
                 }
 
+				if(strcmp(sair,input) == 0) //se acabou a conversa
+				{
+					n = write(newsockfd,"Conversa Terminada X.X\n",23);
+					exit(2); //envia para o processo pai que terminou
+				}
+
 				for(int i = 0; i <= (strlen(input)/4096); i++)
                 {
                     bzero(buffer,sizeof(buffer));
@@ -150,13 +156,6 @@
                     n = write(newsockfd,buffer,sizeof(buffer));
                 }
 
-				if(strcmp(sair,buffer) == 0) //se acabou a conversa
-				{
-					n = write(newsockfd,"Conversa Terminada X.X\n",23);
-					exit(2); //envia para o processo pai que terminou
-				}
-
-				//n = write(newsockfd,buffer,strlen(buffer) + 1);
 				if(n < 0)
 				{
 					printf("Erro ao escrever mensagem, terminando chatroom\n");
@@ -188,10 +187,9 @@
 				
 				if(n < 0)
 				{
-					printf("Erro em receber mensagem, ou acabou a transmissao, por favor escreva /sair para terminar o chat\n");
+					printf("Erro em receber mensagem, ou acabou a transmissao.\nSaindo...\n");
 					kill(pid, SIGTERM); //mata processo filho
 					exit(1);
-					//break; //nao fazemos exit imediatamente para nao criar processos orfaos
 				}
 				char* empty = "";
                 if(strcmp(buffer2,empty) == 0)
@@ -203,7 +201,6 @@
                     printf("O outro usuario terminou a conversa\n Saindo...\n");
                     kill(pid, SIGTERM);//mata processo filho
                     exit(0);
-					//break;
                 }
                 else
 				printf(">%s\n",buffer2);
