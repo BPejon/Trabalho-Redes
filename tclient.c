@@ -8,7 +8,7 @@
 	#include <netinet/in.h> //contem constantes e structs para enderecos de internet
 	#include <sys/wait.h>
     #include <netdb.h>
-    #include <errno.h>
+    #include "readline.h"
 
     void error(char* msg)
     {
@@ -33,12 +33,12 @@
         */
        struct hostent *server;
 
-       char buffer[4096];
+       char *input, buffer[4097];
        
        //tambem estamos usando args aqui, essa vez 2 deles
        if(argc < 3)
        {
-           printf("Argumentos insuficientes\n");
+           printf("Argumentos insuficientes");
            exit(1);
        }
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -79,100 +79,136 @@
         pid_t pid = fork();
 
         if(pid < 0){
-            perror("Fork falhou\n");
+            perror("Fork falhou");
         }
 
-        char* sair = "/sair\n";
+        char* sair = "/sair";
 
-        //programa filho
-        //responsável por enviar as mensagens
-        if(pid == 0){
-            
+        //child cuida de mandar msgs novamente;
+
+        //No momento, nao fechamos automaticamente quando pedimos a saida/recebemos a saida
+        //Para resolver isso, usaremos pipes.
+        //O pipe ira mandar, na eventualidade de saida, um aviso ao processo pai que podemos fechar tudo!
+        //Ao mesmo tempo, se o pipe pai receber tal comando de saida, ele tambem avisara o filho!
+        //Desse jeito, se um termina, ambos terminam!  
+        /*
+        int pipefd1[2]; //comunicacao sentido child --> parent
+        int pipefd2[2]; //comunicacao sentido parent --> child 
+
+        pipe(pipefd1);
+        pipe(pipefd2);
+        if(pipe(pipefd1) == -1 || pipe(pipefd2) == -1)
+        {
+            printf("Erro ao criar pipes\n");
+            return 1;
+        }
+        */
+        if(pid == 0)
+		{
+            //fechamos a parte de ler do 1
+            //close(pipefd1[0]);
+            //fehcamos a parte de escrever do 2
+            //close(pipefd2[1]);
 
 			while(1){
-				bzero(buffer,sizeof(buffer));
 				
                 //criamos input
-                fgets(buffer,4096,stdin);
+                input = read_line();
+
                 char* empty = "";
                 //se nao foi nada, nada faremos
-                if(strcmp(buffer,empty) == 0)
+                if(strcmp(input,empty) == 0)
                 {
                 
                 }
 
-            
-                //se acabou a conversa
-				if(strcmp(sair,buffer) == 0) 
+                //se queremos acabar a conversa, mandamos um sinal para la.
+                //isso quer dizer que temos que mandar, para o pipe, um aviso de que acabamos.
+				if(strcmp(sair,input) == 0) //se acabou a conversa
 				{
 					n = write(sockfd,"Conversa Terminada X.X\n",23);
-                    //Envia para o processo pai sua morte
-					exit(2);
+                    //write(pipefd1[1],"over",strlen("over"));
+					exit(0);
 				}
 
-				n = write(sockfd,buffer,sizeof(buffer));
+                for(int i = 0; i <= (strlen(input)/4096); i++)
+                {
+                    bzero(buffer,sizeof(buffer));
+                    strcpy(buffer, input + (i * 4097));
+                    n = write(sockfd,buffer,sizeof(buffer));
+                }
+
 				if(n < 0)
 				{
-					printf("Erro ao escrever mensagem, terminando chatroom\n");
+					printf("Erro ao escrever mensagem, terminando chatroom");
 					exit(1);
 				}
+
+                //nessa parte checamos se o parent recebeu alguma mensagem de que acabou (no caso do servidor)
+                /*char* checkover;
+                read(pipefd2[0],checkover,10);
+                if(strcmp(checkover,"over") == 0)
+                {
+                    exit(0);
+                }*/
+
 			}
 
 
 		}
         
         //buffer de receber mensagens
-        //programa pai
-        else{
+        else
+		{
+            /* //fechamos a parte de escrever do 1
+            close(pipefd1[1]);
+            //fehcamos a parte de ler do 2
+            close(pipefd2[0]);
+            */
 
-            char buffer2[4096];
+            char buffer2[4097];
+			//char *buffer2;
 			while (1)
 			{
-				bzero(buffer2,sizeof(buffer));
-				n = read(sockfd,buffer2,sizeof(buffer)); //lemos do buffer,
-
-                //Caso o cliente quiser sair da conversa
-                int pidfilho, status;
-                    pidfilho = waitpid(pid, &status, WNOHANG); //verifica se o processo filho mandou algo
-                    if(pidfilho < 0){
-                        perror("waitpid\n");
-                    }
-                    if(pidfilho > 0){
-                      exit(0);
-                    }
-
+				bzero(buffer2,sizeof(buffer2));
+				n = read(sockfd,buffer2,sizeof(buffer2) - 1); //lemos do buffer
 
 				if(n < 0)
 				{
-					printf("Erro em receber mensagem, ou acabou a transmissao.\n Saindo...\n");
-                    kill(pid, SIGTERM);//mata processo filho
-					exit(1); 
+					printf("Erro em receber mensagem, ou acabou a transmissao, por favor escreva /sair para terminar o chat");
+					break; //nao fazemos exit imediatamente para nao criar processos orfaos
 				}
-
                 char* empty = "";
                 if(strcmp(buffer2,empty) == 0)
-                {   
+                {
 
                 }
-
                 //se o outro lado pediu para terminar a conversa, para ter certeza, terminamos aqui.
-                else if(strcmp(buffer2,"Conversa Terminada X.X\n") == 0){
-                    printf(" O outro usuario terminou a conversa.\n Saindo...\n");
-                    kill(pid, SIGTERM); //mata processo filho
-                    exit(0);
+                else if(strcmp(buffer2,"Conversa Terminada X.X\n") == 0)
+                {
+                    printf("O outro usuario terminou a conversa, escrevra /sair\n");
+                    //se terminada a conversa, temos que avisar o child!
+                    //write(pipefd2[1],"over",strlen("over"));
+                    break;
+                }
+                else
+                {
+                    printf(">%s\n",buffer2);
                 }
 
-               
-                else{
-                    printf(">%s",buffer2);
-
-                }          
+                //depois, checar se o child mandou uma mensagem de que temos que terminar
+               /* char* checkover;
+                read(pipefd1[0],checkover,10);
+                if(strcmp(checkover,"over") == 0)
+                {
+                    printf("Conversa Terminada");
+                    exit(0);
+                }*/           
 
 			}
 			
 			
 		}
-
 
 		wait(NULL);
 
