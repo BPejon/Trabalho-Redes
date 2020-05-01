@@ -5,8 +5,7 @@ Alunos:
 
  Sistemas Operacionais Utilizados:
     Linux Mint 18.3
-    Linux Ubuntu 
-    Linux 
+    Linux Ubuntu 18.04.4
 
  Compilador Utilizado: 
     GCC
