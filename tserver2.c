@@ -94,7 +94,7 @@ void retirar_cli(int id){
     for(int i = 0; i < MAX_CLIENTS; i++)
     {
         if(clients[i]){
-            if(clients[i]->uid = id)
+            if(clients[i]->uid == id)
             {
                 clients[i] = NULL;
                 break;
@@ -124,7 +124,7 @@ void retirar_cli(int id){
                 //write retorna -1 caso tenha algum problema, como seria o caso de um final repentino na parte do cliente.
                 //tentamos 5 vezes, se nao der certo, fechamos o usuario. 
                 int errcounter = 0;
-                while(write(clients[i]->sockfd, message,strlen(message))< 0 && errcounter < 5)
+                while(write(clients[i]->sockfd, message,strlen(message)) < 0 && errcounter < 5)
                 {
                     errcounter++;
                 }
@@ -134,12 +134,12 @@ void retirar_cli(int id){
                 //perguntarei para a professora.  
                 //Lendo melhor o codigo, ainda preciso pensar em uma boa solucao.
                 //Pensando melhor, teriamos de usar a parte de "deletar" presente no final de comm_cli aqui.
-                /*
-                    if(errcounter = 5){
-                        pthread_mutex_unlock(&climutex);
-                        retirar_cli(clients[i]->uid);
-                    }
-                */
+                
+                if(errcounter == 5){
+                    pthread_mutex_unlock(&climutex);
+                    retirar_cli(clients[i]->uid);
+                }
+                
             }
         }
     }

@@ -83,6 +83,8 @@
         portno = atoi(argv[2]);
         serv_addr.sin_port = htons(portno);
 
+        printf("Bem vindo ao servidor!\nComandos:\n/connect: conectar ao servidor\n/quit: sair do servidor\n/ping: verificar conexao\n");
+
         //Antes de conectar, como pede o sistema, o usuario precisa escrever "/connect"
         //para isto, entao, vamos criar os comandos em um while para o usuario brincar. 
 
@@ -98,7 +100,7 @@
                 return 0;
             }
             else if(strcmp(input,"/ping") == 0){
-                printf("Nao conectado ao servidor ainda\n");
+                printf("Voce nao esta conectado ao servidor ainda\n");
             }
             else if(strcmp(input,"/connect") == 0){
                 break;
@@ -208,7 +210,7 @@
 
 				if(n < 0)
 				{
-					printf("Erro em receber mensagem, ou acabou a transmissao.\n Saindo...\n");
+					printf("Erro ao receber mensagem, ou acabou a transmissao.\n Saindo...\n");
 					kill(pid, SIGTERM);//mata processo filho
                     exit(1);
 				}
@@ -220,7 +222,7 @@
                 //se o outro lado pediu para terminar a conversa, para ter certeza, terminamos aqui.
                 else if(strcmp(buffer2,"Conversa Terminada X.X\n") == 0)
                 {
-                    printf("O outro usuario terminou a conversa.\n Saindo...\n");
+                    printf("Voce saiu da conversa.\n");
                     kill(pid, SIGTERM);
                     exit(0);
                 }
