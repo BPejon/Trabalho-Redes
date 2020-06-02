@@ -20,8 +20,7 @@ Basicamente, enquanto anteriormente tinhamos apenas um cliente, agora temos vari
 Esses clientes serao guardados em uma string da struct cliente. Quando um deles manda uma
 mensagem, correremos a string mandando a tal mensagem para todos os outros que nao ele mesmo.
 
-Para cuidar da criacao/recebimento/envio de mensagem, estaremos usando threads. 
-Rezo por deus que a questao do deadlock se resolva. Digo o mesmo para a dos ips.
+Para cuidar da criacao/recebimento/envio de mensagem, estaremos usando threads.
 */
 
 //Como estamos lidando com varios clientes, temos que criar varios sockaddr_in de clientes
@@ -122,25 +121,11 @@ void retirar_cli(int id){
             if(clients[i]->uid != id){
 
                 //write retorna -1 caso tenha algum problema, como seria o caso de um final repentino na parte do cliente.
-                //tentamos 5 vezes, se nao der certo, fechamos o usuario. 
                 int errcounter = 0;
                 while(write(clients[i]->sockfd, message,strlen(message)) < 0 && errcounter < 5)
                 {
                     errcounter++;
                 }
-
-                //se ja falhamos multiplas vezes, deletamos o usuario em questao.
-                //Parte experimental do codigo, nao sei como seria o comportamento dos threads aqui. 
-                //perguntarei para a professora.  
-                //Lendo melhor o codigo, ainda preciso pensar em uma boa solucao.
-                //Pensando melhor, teriamos de usar a parte de "deletar" presente no final de comm_cli aqui.
-                
-                /*
-                if(errcounter == 5){
-                    pthread_mutex_unlock(&climutex);
-                    retirar_cli(clients[i]->uid);
-                }
-                */
                 
             }
         }
@@ -242,6 +227,8 @@ void retirar_cli(int id){
 
         }
         else{
+            //se leu algo menor ou igual a 0, temos um problema
+            //testamos 5 vezes, se der errado nas 5, removemos o usuario
             errcounter++;
             if(errcounter >= 5){
                 sair = 0;
@@ -250,7 +237,7 @@ void retirar_cli(int id){
 
     }
 
-    //Se voce esta aqui, quer dizer que voce decidiu sair. 
+    //Se voce esta aqui, quer dizer que voce decidiu sair ou foi removido por problemas de conexao.
 
     //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
     //nos usuarios com uma string diferente. 
@@ -284,7 +271,6 @@ void retirar_cli(int id){
 
  //Estamos agora na famosa main
  //Aqui cuidamos de iniciar o servidor e de esperar/adicionar novas conexoes. 
- //Tinha pensado em usar forks tambem para possiveis "comandos moderadores", mas por enquanto prefiro nao arriscar.
  //Como anteriormente, para comecar o servidor usamos ./tserver portnumber
  int main(int argc, char**argv){
      
@@ -319,7 +305,6 @@ void retirar_cli(int id){
      serv_addr.sin_addr.s_addr = INADDR_ANY;
 
      //ignorar sinais de pipe
-     //no exemplo que eu vi, este era usado, ainda preciso entender
      signal(SIGPIPE,SIG_IGN);
 
      //Fazemos o bind 
@@ -349,7 +334,7 @@ void retirar_cli(int id){
         //Primeiro vemos se temos o numero maximo de clientes
         if((c_count+1)==MAX_CLIENTS){
             printf("Maximo de clientes atingido");
-            //aqui usamo continue.
+            //aqui usamos continue.
             //O que continue faz?
             //Continue, diferente de break, manda "rodar no inicio"
             //o while novamente, basicamente, pula o resto do while.

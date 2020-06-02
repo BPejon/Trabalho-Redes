@@ -159,7 +159,6 @@
                 //se acabou a conversa
 				if(strcmp(sair,input) == 0)
 				{
-                    //printf("entrou\n");
 					n = write(sockfd,sair,sizeof(sair));
                     //Envia para o processo pai sua morte
 					exit(2);
@@ -169,7 +168,6 @@
                 {
                     bzero(buffer,sizeof(buffer));
                     strcpy(buffer, input + (i * 4097));
-                    //printf("%d", strcmp(sair,buffer));
                     n = write(sockfd,buffer,sizeof(buffer));
                 }
 
