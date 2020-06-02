@@ -94,7 +94,7 @@ void retirar_cli(int id){
     for(int i = 0; i < MAX_CLIENTS; i++)
     {
         if(clients[i]){
-            if(clients[i]->uid = id)
+            if(clients[i]->uid == id)
             {
                 clients[i] = NULL;
                 break;
@@ -124,7 +124,7 @@ void retirar_cli(int id){
                 //write retorna -1 caso tenha algum problema, como seria o caso de um final repentino na parte do cliente.
                 //tentamos 5 vezes, se nao der certo, fechamos o usuario. 
                 int errcounter = 0;
-                while(write(clients[i]->sockfd, message,strlen(message))< 0 && errcounter < 5)
+                while(write(clients[i]->sockfd, message,strlen(message)) < 0 && errcounter < 5)
                 {
                     errcounter++;
                 }
@@ -134,12 +134,14 @@ void retirar_cli(int id){
                 //perguntarei para a professora.  
                 //Lendo melhor o codigo, ainda preciso pensar em uma boa solucao.
                 //Pensando melhor, teriamos de usar a parte de "deletar" presente no final de comm_cli aqui.
+                
                 /*
-                    if(errcounter = 5){
-                        pthread_mutex_unlock(&climutex);
-                        retirar_cli(clients[i]->uid);
-                    }
+                if(errcounter == 5){
+                    pthread_mutex_unlock(&climutex);
+                    retirar_cli(clients[i]->uid);
+                }
                 */
+                
             }
         }
     }
@@ -189,6 +191,8 @@ void retirar_cli(int id){
     //limpamos o input. 
     bzero(input,4096);
 
+    int errcounter = 0;
+
     //loop em que recebemos mensagens do user e mandamos para os outros. 
     while(sair){
 
@@ -237,16 +241,30 @@ void retirar_cli(int id){
 
 
         }
+        else{
+            errcounter++;
+            if(errcounter >= 5){
+                sair = 0;
+            }
+        }
 
     }
 
     //Se voce esta aqui, quer dizer que voce decidiu sair. 
+
+    //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
+    //nos usuarios com uma string diferente. 
+    sprintf(input, "%s saiu do chat", cliente->name);
+        
+    //uid sera dado ao cliente na main.
+    send_message(input, cliente->uid);
 
     //mandamos a "mensagem da morte" para o usuario
     //usamos esta mensagem no ultimo cliente e, no intuito de mudar o minimo possivel, continuamos usando.   
     char* ender = "Conversa Terminada X.X\n";
     write(cliente->sockfd,ender,strlen(ender));
 
+    retirar_cli(cliente->uid);
     //fechamos o file descriptor
     close(cliente->sockfd);
     //libramos a memoria
