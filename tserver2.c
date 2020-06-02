@@ -191,9 +191,10 @@ void retirar_cli(int id){
     //limpamos o input. 
     bzero(input,4096);
 
+    int errcounter = 0;
+
     //loop em que recebemos mensagens do user e mandamos para os outros. 
     while(sair){
-        int errcounter = 0;
 
         //funcao de ler, como visto antes, normal...
         int readv = read(cliente->sockfd,input,4096);
@@ -242,21 +243,28 @@ void retirar_cli(int id){
         }
         else{
             errcounter++;
-        }
-
-        if(errcounter >= 5){
-            sair = 0;
+            if(errcounter >= 5){
+                sair = 0;
+            }
         }
 
     }
 
     //Se voce esta aqui, quer dizer que voce decidiu sair. 
 
+    //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
+    //nos usuarios com uma string diferente. 
+    sprintf(input, "%s saiu do chat", cliente->name);
+        
+    //uid sera dado ao cliente na main.
+    send_message(input, cliente->uid);
+
     //mandamos a "mensagem da morte" para o usuario
     //usamos esta mensagem no ultimo cliente e, no intuito de mudar o minimo possivel, continuamos usando.   
     char* ender = "Conversa Terminada X.X\n";
     write(cliente->sockfd,ender,strlen(ender));
 
+    retirar_cli(cliente->uid);
     //fechamos o file descriptor
     close(cliente->sockfd);
     //libramos a memoria
