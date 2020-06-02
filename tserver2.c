@@ -135,10 +135,12 @@ void retirar_cli(int id){
                 //Lendo melhor o codigo, ainda preciso pensar em uma boa solucao.
                 //Pensando melhor, teriamos de usar a parte de "deletar" presente no final de comm_cli aqui.
                 
+                /*
                 if(errcounter == 5){
                     pthread_mutex_unlock(&climutex);
                     retirar_cli(clients[i]->uid);
                 }
+                */
                 
             }
         }
@@ -191,6 +193,7 @@ void retirar_cli(int id){
 
     //loop em que recebemos mensagens do user e mandamos para os outros. 
     while(sair){
+        int errcounter = 0;
 
         //funcao de ler, como visto antes, normal...
         int readv = read(cliente->sockfd,input,4096);
@@ -236,6 +239,13 @@ void retirar_cli(int id){
 
 
 
+        }
+        else{
+            errcounter++;
+        }
+
+        if(errcounter >= 5){
+            sair = 0;
         }
 
     }
