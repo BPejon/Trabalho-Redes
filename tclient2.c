@@ -11,6 +11,10 @@
     #include <errno.h>
     #include "readline.h"
 
+
+    #define RESET "\x1B[0m"
+    #define ITALICO "\x1B[3m"
+
     /*
         Versao 2.0, para o trablaho 2:
     
@@ -57,13 +61,13 @@
        //tambem estamos usando args aqui, essa vez 2 deles
        if(argc < 3)
        {
-           printf("Argumentos insuficientes\n");
+           printf(ITALICO "Argumentos insuficientes\n" RESET);
            exit(1);
        }
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if(sockfd < 0)
         {
-            printf("Problemas com Socket\n");
+            printf(ITALICO "Problemas com Socket\n" RESET);
             exit(1);
         }
        //Agora pegamos o servidor usando o seu nome
@@ -100,13 +104,15 @@
                 return 0;
             }
             else if(strcmp(input,"/ping") == 0){
-                printf("Voce nao esta conectado ao servidor ainda\n");
+                printf(ITALICO "Voce nao esta conectado ao servidor ainda\n" RESET);
             }
             else if(strcmp(input,"/connect") == 0){
                 break;
             }
             else{
+                printf(ITALICO);
                 printf("Comando desconhecido\n");
+                printf(RESET);
             }
     
         }
@@ -119,7 +125,7 @@
         //A funcao connect leva 3 variaveis: Descritor do socket, endereco do host e o tamanho do endereco
         if(connect(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr)) < 0)
         {
-            printf("Erro de conexao\n");
+            printf(ITALICO "Erro de conexao\n" RESET);
             exit(1);
         }
        
@@ -133,7 +139,7 @@
         pid_t pid = fork();
 
         if(pid < 0){
-            perror("Fork falhou\n");
+            perror(ITALICO "Fork falhou\n" RESET);
         }
 
         //precisei mudar a string para quit, conformando ao trabalho.
@@ -164,6 +170,7 @@
 					exit(2);
 				}
 
+                //caso a mensagem ultrapasse 4096 bytes
                 for(int i = 0; i <= (strlen(input)/4096); i++)
                 {
                     bzero(buffer,sizeof(buffer));
