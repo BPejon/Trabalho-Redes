@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <time.h>
 
 //nosso servidor atendera ate 100 clientes, se assim for.
 #define MAX_CLIENTS 100
@@ -23,6 +24,41 @@ mensagem, correremos a string mandando a tal mensagem para todos os outros que n
 Para cuidar da criacao/recebimento/envio de mensagem, estaremos usando threads.
 */
 
+//Reseta a cor escolhida
+#define RESET "\x1B[0m"
+#define ITALICO "\x1B[3m"
+
+//Função que identifica uma cor aleatória para cada usuário
+void cor_aleatoria(char *cor){
+    srand(time(NULL));
+
+    int valor = rand() %7;
+
+    switch (valor){
+        case 0: //VERMELHO
+            strcpy(cor,"\x1B[31m\0");
+        break;
+        case 1: //VERDE
+            strcpy(cor,"\x1B[32m\0");
+        break;
+        case 2: //AMARELO
+            strcpy(cor,"\x1B[33m\0");
+        break;
+        case 3: //AZUL
+            strcpy(cor,"\x1B[34m\0");
+        break;
+        case 4: //ROXO
+            strcpy(cor,"\x1B[35m\0");
+        break;
+        case 5: //AZUL MARINHO
+            strcpy(cor,"\x1B[36m\0");
+        break;
+        case 6: //BRANCO
+            strcpy(cor,"\x1B[37m\0");
+        break;
+    }
+}
+
 //Como estamos lidando com varios clientes, temos que criar varios sockaddr_in de clientes
 //Temos quer guardar diferentes informacoes dele para poder funcionar corretamente. 
 typedef struct client{
@@ -33,7 +69,8 @@ typedef struct client{
     int sockfd;
 
     //Id unico do usuario (um numero qualquer)
-    int uid;
+    int uid;    
+    
 
     //Nome que o usuario manda, a primeira coisa que ira com ele, guardamos aqui.  
     char name[32];
@@ -124,9 +161,9 @@ void retirar_cli(int id){
                 int errcounter = 0;
                 while(write(clients[i]->sockfd, message,strlen(message)) < 0 && errcounter < 5)
                 {
+
                     errcounter++;
-                }
-                
+                }     
             }
         }
     }
@@ -136,11 +173,12 @@ void retirar_cli(int id){
 
 
 //esta eh a funcao que vai quando ocorre o thread, ela e a porcao "servidor/cliente"
-//eh resposabilidade desta funcao receber os inputs (tamanho 4096) e envialo aos outros.
+//eh resposabilidade desta funcao receber os inputs (tamanho 4096) e envia-lo aos outros.
 //Aqui tambem cuidamos de "/ping" e "/quit", "/connect" lidamos no usuario. 
 //O main contara, basicamente, com as configuracoes e inicio do servidor.
  void* comm_cli(void *arg){
-    
+    char cor[9];
+
      char input[4096];
      //recebemos o nome e colocaremos nesta string
      char nome[32];
@@ -159,15 +197,18 @@ void retirar_cli(int id){
          //acima checamos se recebemos um nome, ou se o nome eh muito pequeno (pois pode ser um simples " ", o que nao queremos)
          //ou tambem se ele ficou acima do valor desejado (queremos 30 caracteres, com 2 de folga)
          //Posivelmente tratamos isto no proprio cliente. 
-         printf("Nome nao recebido/problema ao receber/nome invalido");
+         printf(ITALICO "Nome nao recebido/problema ao receber/nome invalido" RESET);
      }
      else{
          //completamos a "ficha do cliente"
          strcpy(cliente->name,nome);
 
+         //O usuario recebe uma cor propria         
+         cor_aleatoria(cor);
+
         //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
         //nos usuarios com uma string diferente. 
-        sprintf(input, "%s entrou no chat", cliente->name);
+        sprintf(input, ITALICO "%s entrou no chat\n" RESET, cliente->name);
         
         //uid sera dado ao cliente na main.
         send_message(input, cliente->uid);
@@ -193,6 +234,7 @@ void retirar_cli(int id){
                 char* pong = "pong\n";
                 int failscount = 0;
                 //temos que checar se estamos escrevendo sem problemas, se tiver problemas, temos, entao, que tirar. 
+                
                while( write(cliente->sockfd,pong,strlen(pong)) < 0 && failscount < 5)
                 {
                     failscount++;    
@@ -200,6 +242,7 @@ void retirar_cli(int id){
                 if(failscount != 0){
                     sair = 0;
                 }
+            
             }
 
             //se o usuario quiser sair, terminamos o loop
@@ -217,10 +260,10 @@ void retirar_cli(int id){
                 //Logo, precisamos de mais um pouco de espaco. 
                 //Aqui entao, criamos uma nova string, e usamos o sprintf
                 char bigtext[5100];
-                sprintf(bigtext,"%s: %s",cliente->name,input);
+                sprintf(bigtext,"%s%s: %s" RESET,cor, cliente->name,input); //CHECK
                 send_message(bigtext,cliente->uid);
                 //para melhor ver o server funcionando, postamos aqui tambem a mensagem. 
-                printf("%s\n",bigtext);
+                printf("%s%s\n",cor, bigtext); //CHECK
             }
 
 
@@ -241,7 +284,7 @@ void retirar_cli(int id){
 
     //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
     //nos usuarios com uma string diferente. 
-    sprintf(input, "%s saiu do chat", cliente->name);
+    sprintf(input, ITALICO "%s saiu do chat" RESET, cliente->name);
         
     //uid sera dado ao cliente na main.
     send_message(input, cliente->uid);
@@ -275,7 +318,7 @@ void retirar_cli(int id){
  int main(int argc, char**argv){
      
      if(argc < 2){
-         printf("Erro, numero de Port nao informado");
+         printf(ITALICO "Erro, numero de Port nao informado" RESET);
          return 1;
      }
 
@@ -283,7 +326,7 @@ void retirar_cli(int id){
      //   
      struct sockaddr_in serv_addr, cli_addr;
      pthread_t tid;
-     int portno, sockfd,newsockfd, n;
+     int portno, sockfd,newsockfd;
     
 
      //Criamos o socket file descriptor, como no anterior
@@ -310,7 +353,7 @@ void retirar_cli(int id){
      //Fazemos o bind 
      if(bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr)) < 0)
      {
-         printf("Erro no binding\n");
+         printf(ITALICO "Erro no binding\n" RESET);
          exit(1);
      }
 
@@ -318,7 +361,7 @@ void retirar_cli(int id){
      //Vamos agora ouvir.
 
      if(listen(sockfd,10) < 0){
-         printf("Erro no listen");
+         printf(ITALICO "Erro no listen" RESET);
          exit(1);
      } 
 
@@ -333,7 +376,7 @@ void retirar_cli(int id){
         newsockfd = accept(sockfd,(struct sockaddr*)&cli_addr,&clilen);
         //Primeiro vemos se temos o numero maximo de clientes
         if((c_count+1)==MAX_CLIENTS){
-            printf("Maximo de clientes atingido");
+            printf(ITALICO "Maximo de clientes atingido" RESET);
             //aqui usamos continue.
             //O que continue faz?
             //Continue, diferente de break, manda "rodar no inicio"
