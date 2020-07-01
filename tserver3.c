@@ -156,13 +156,13 @@ void retirar_cli(int id){
 
     //mesma ideia do anterior, tudo que modifica o vetor tem de haver um lock.
     pthread_mutex_lock(&climutex);
-    int id;
+    int chatid;
     int i = 0;
     for(i; i < MAX_CLIENTS; i++)
     {
         if(clients[i]){
             if(clients[i]->uid == id){
-                id = clients[i]->chatid;
+                chatid = clients[i]->chatid;
                 clients[i] = NULL;
                 break;
             }
@@ -171,8 +171,9 @@ void retirar_cli(int id){
 
     //agora retira o usuario da sala
     //se a sala ficar vazia, entao exclua
-    if((--(chatrooms[i]->qtdpessoas) ) == 0){
-        chatrooms[i] = NULL;
+    if((--(chatrooms[chatid]->qtdpessoas) ) == 0){
+        free(chatrooms[chatid]);
+        chatrooms[chatid] = NULL;
     }
 
     pthread_mutex_unlock(&climutex);
@@ -219,7 +220,7 @@ void retirar_cli(int id){
     int i;
     for(i = 0; i<MAX_CHATROOM; ++i){
         //se existe a sala, entre nela
-        if(strcmp(chatrooms[i]->nome,"nome_sala") == 0){
+        if(strcmp(chatrooms[i]->nome,nome_sala) == 0){
             ++(chatrooms[i]->qtdpessoas);
             cliente->chatid = i;
             adicionado = 1;            
@@ -233,6 +234,7 @@ void retirar_cli(int id){
             //se existe a sala, entre nela
             if(chatrooms[i] == NULL){
              strcpy(chatrooms[i]->nome,nome_sala);
+                chatrooms[i] =(CHAT*) malloc(sizeof(CHAT));
                 chatrooms[i]->qtdpessoas = 1;
                 cliente->admin = 1;                     //o usuario q criou a sala é o admin 
                 cliente->chatid = i;          
@@ -241,6 +243,7 @@ void retirar_cli(int id){
     }  
 
     pthread_mutex_unlock(&climutex);
+
     if(adicionado != 0){
         return i;
     }
@@ -355,7 +358,7 @@ void retirar_cli(int id){
             }
             //se for uma mensagem comum e estiver mutado
             else if (cliente->mutado == 1){
-                printf(ITALICO "Voce esta mutado\n" RESET);
+                printf(ITALICO "VOCE ESTA MUTADO\n" RESET);
 
             }
             else{
