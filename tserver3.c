@@ -13,6 +13,7 @@
 
 //nosso servidor atendera ate 100 clientes, se assim for.
 #define MAX_CLIENTS 100
+#define MAX_CHATROOM 100
 
 
 /*
@@ -59,6 +60,21 @@ void cor_aleatoria(char *cor){
     }
 }
 
+//Struct para guardar informaçoes da sala de bate papo
+typedef struct chatroom{
+    char nome[200];
+    int qtdpessoas; //contagem de pessoas na sala
+
+}CHAT;
+
+//Incializa o vertor de chatroom com valor NULL
+void inicializa_chatroom(void){
+    for(int i=0; i<MAX_CHATROOM; ++i){
+        chatrooms[i] = NULL;
+
+    }
+
+}
 //Como estamos lidando com varios clientes, temos que criar varios sockaddr_in de clientes
 //Temos quer guardar diferentes informacoes dele para poder funcionar corretamente. 
 typedef struct client{
@@ -71,9 +87,20 @@ typedef struct client{
     //Id unico do usuario (um numero qualquer)
     int uid;    
     
+    //Booleano para verificar se a possoa está mutada ou não
+    int mutado;
+
+    //Booleano para verificar se o usuario é adiministrador da sala
+    int admin;
+
+    //Booleano para verificar se o usuário foi kickado da sala ou não
+    int kickado;
 
     //Nome que o usuario manda, a primeira coisa que ira com ele, guardamos aqui.  
-    char name[32];
+    char name[50];
+
+    //Numero do chat que o usuario esta conectado
+    int chatid; //-1 quando nao estiver conectado
 } CLI;
 
 
@@ -86,6 +113,9 @@ pthread_mutex_t climutex = PTHREAD_MUTEX_INITIALIZER;
 
 //ja inicializamos aqui tambem o vetor de clientes, ele guardara 100 enderecos para clientes;
 CLI *clients[MAX_CLIENTS];
+
+//Vetor de ChatRooms
+CHAT *chatrooms[MAX_CHATROOM];
 
 static _Atomic unsigned int c_count = 0;
 
@@ -126,16 +156,24 @@ void retirar_cli(int id){
 
     //mesma ideia do anterior, tudo que modifica o vetor tem de haver um lock.
     pthread_mutex_lock(&climutex);
-    
-    for(int i = 0; i < MAX_CLIENTS; i++)
+    int chatid;
+    int i = 0;
+    for(i; i < MAX_CLIENTS; i++)
     {
         if(clients[i]){
-            if(clients[i]->uid == id)
-            {
+            if(clients[i]->uid == id){
+                chatid = clients[i]->chatid;
                 clients[i] = NULL;
                 break;
             }
         }
+    }
+
+    //agora retira o usuario da sala
+    //se a sala ficar vazia, entao exclua
+    if((--(chatrooms[chatid]->qtdpessoas) ) == 0){
+        free(chatrooms[chatid]);
+        chatrooms[chatid] = NULL;
     }
 
     pthread_mutex_unlock(&climutex);
@@ -146,15 +184,16 @@ void retirar_cli(int id){
 
 
  //Enviamos uma mensagem de forma simples, mandando escrever em todos os clientes menos a si proprio. 
- void send_message(char* message, int id){
+ void send_message(char* message, int id , int chatid){
      
      //como nessa funcao tambem navegamos pelo vetor, temos que trancar qualquer mudanca a ele. 
      //Se um pedido de acionar/deletar usuario foi feito antes, obviamente, esta mensagem nao sera mandada a ele.
      pthread_mutex_lock(&climutex);
 
-    for(int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if(clients[i]){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        //Se o cliente esta na mesma sala que o remetente
+        if(clients[i]->chatid == chatid){
+            //nao enviar mesmasem duplicada para o remetente
             if(clients[i]->uid != id){
 
                 //write retorna -1 caso tenha algum problema, como seria o caso de um final repentino na parte do cliente.
@@ -171,6 +210,50 @@ void retirar_cli(int id){
      pthread_mutex_unlock(&climutex);
  }
 
+//Funcao que escaneia todos as salas de chat procurando a sala com o mesmo nome,
+ //se não existir, entao cria e retorna 0
+ //Se existir, entao o usuario entrara nela e retornara o id da sala
+ int verificar_chatroom(char nome_sala[200], CLI *cliente){
+    pthread_mutex_lock(&climutex);
+
+    int adicionado =0;
+    int i;
+    for(i = 0; i<MAX_CHATROOM; ++i){
+        //se existe a sala, entre nela
+        if(strcmp(chatrooms[i]->nome,nome_sala) == 0){
+            ++(chatrooms[i]->qtdpessoas);
+            cliente->chatid = i;
+            adicionado = 1;            
+        }
+    }
+
+
+    //se a sala não existe, então procure um espaço vago e crie-a.
+    if(adicionado == 0){
+        for(i=0; i<MAX_CHATROOM; ++i){
+            //se existe a sala, entre nela
+            if(chatrooms[i] == NULL){
+             strcpy(chatrooms[i]->nome,nome_sala);
+                chatrooms[i] =(CHAT*) malloc(sizeof(CHAT));
+                chatrooms[i]->qtdpessoas = 1;
+                cliente->admin = 1;                     //o usuario q criou a sala é o admin 
+                cliente->chatid = i;          
+             }
+        } 
+    }  
+
+    pthread_mutex_unlock(&climutex);
+
+    if(adicionado != 0){
+        return i;
+    }
+    else{
+            return -1;
+        }
+
+
+ }
+
 
 //esta eh a funcao que vai quando ocorre o thread, ela e a porcao "servidor/cliente"
 //eh resposabilidade desta funcao receber os inputs (tamanho 4096) e envia-lo aos outros.
@@ -181,7 +264,7 @@ void retirar_cli(int id){
 
      char input[4096];
      //recebemos o nome e colocaremos nesta string
-     char nome[32];
+     char nome[50];
      //flag que usaremos caso o usuario saia
      int sair = 1;
     
@@ -193,13 +276,20 @@ void retirar_cli(int id){
      CLI* cliente = (CLI*) arg;
 
      //Primeira coisa que o usuario ira mandar eh o seu nome, recebemos ele agora.
-     if(read(cliente->sockfd,nome,32) <=0 || strlen(nome) < 2|| strlen(nome)>=31){
+     if(read(cliente->sockfd,nome,50) <=0 || strlen(nome) < 2|| strlen(nome)>=49){
          //acima checamos se recebemos um nome, ou se o nome eh muito pequeno (pois pode ser um simples " ", o que nao queremos)
-         //ou tambem se ele ficou acima do valor desejado (queremos 30 caracteres, com 2 de folga)
+         //ou tambem se ele ficou acima do valor desejado (queremos 50 caracteres, com 2 de folga)
          //Posivelmente tratamos isto no proprio cliente. 
          printf(ITALICO "Nome nao recebido/problema ao receber/nome invalido" RESET);
      }
+
+    //Se o usuario quiser sair durante a seleção do nome
+     else if(strcmp(nome,"/quit") == 0){
+            sair = 0;
+        }
+
      else{
+
          //completamos a "ficha do cliente"
          strcpy(cliente->name,nome);
 
@@ -211,7 +301,19 @@ void retirar_cli(int id){
         sprintf(input, ITALICO "%s entrou no chat\n" RESET, cliente->name);
         
         //uid sera dado ao cliente na main.
-        send_message(input, cliente->uid);
+        send_message(input, cliente->uid, cliente->chatid);
+     }
+
+     //se o usuario não quiser sair, então crie uma sala ou entre em uma
+     if(sair != 0){
+        char nome_sala[200];
+        if(read(cliente->sockfd,nome_sala,200) <= 0 || strlen(nome_sala) < 2 || strlen(nome_sala) >=200){
+            printf(ITALICO "Nome nao recebido/problema ao receber/nome invalido" RESET);
+        }
+        //Insere o usuario na sala ou cria uma nova sala 
+        else{
+            verificar_chatroom(nome_sala, cliente);
+        }
      }
 
     //limpamos o input. 
@@ -254,7 +356,11 @@ void retirar_cli(int id){
             else if(strcmp(input,"") == 0){
 
             }
-            //se for uma mensagem comum.
+            //se for uma mensagem comum e estiver mutado
+            else if (cliente->mutado == 1){
+                printf(ITALICO "VOCE ESTA MUTADO\n" RESET);
+
+            }
             else{
                 //modelo nick: msg
                 //Logo, precisamos de mais um pouco de espaco. 
@@ -263,7 +369,7 @@ void retirar_cli(int id){
                 sprintf(bigtext,"%s%s: %s" RESET,cor, cliente->name,input); //CHECK
                 send_message(bigtext,cliente->uid);
                 //para melhor ver o server funcionando, postamos aqui tambem a mensagem. 
-                printf("%s%s\n",cor, bigtext); //CHECK
+                printf("%s%s\n",cor, bigtext);
             }
 
 
@@ -321,6 +427,9 @@ void retirar_cli(int id){
          printf(ITALICO "Erro, numero de Port nao informado" RESET);
          return 1;
      }
+
+     //inicializa o vetor de chat rooms
+     inicializa_chatroom();
 
      //novamente criamos um sockadrr_in para o server e para o cliente. 
      //   
@@ -391,6 +500,11 @@ void retirar_cli(int id){
         cli->adress = cli_addr;
         cli->sockfd = newsockfd;
         cli->uid = id++;
+        cli->mutado = 0;
+        cli->kickado = 0;
+        cli->admin = 0;
+        cli->chatid = -1;
+
 
         //adicionamos o cliente ao vetor e criamos um thread
         adicionar_cli(cli);
