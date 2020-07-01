@@ -156,16 +156,23 @@ void retirar_cli(int id){
 
     //mesma ideia do anterior, tudo que modifica o vetor tem de haver um lock.
     pthread_mutex_lock(&climutex);
-    
-    for(int i = 0; i < MAX_CLIENTS; i++)
+    int id;
+    int i = 0;
+    for(i; i < MAX_CLIENTS; i++)
     {
         if(clients[i]){
-            if(clients[i]->uid == id)
-            {
+            if(clients[i]->uid == id){
+                id = clients[i]->chatid;
                 clients[i] = NULL;
                 break;
             }
         }
+    }
+
+    //agora retira o usuario da sala
+    //se a sala ficar vazia, entao exclua
+    if((--(chatrooms[i]->qtdpessoas) ) == 0){
+        chatrooms[i] = NULL;
     }
 
     pthread_mutex_unlock(&climutex);
@@ -176,15 +183,16 @@ void retirar_cli(int id){
 
 
  //Enviamos uma mensagem de forma simples, mandando escrever em todos os clientes menos a si proprio. 
- void send_message(char* message, int id){
+ void send_message(char* message, int id , int chatid){
      
      //como nessa funcao tambem navegamos pelo vetor, temos que trancar qualquer mudanca a ele. 
      //Se um pedido de acionar/deletar usuario foi feito antes, obviamente, esta mensagem nao sera mandada a ele.
      pthread_mutex_lock(&climutex);
 
-    for(int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if(clients[i]){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        //Se o cliente esta na mesma sala que o remetente
+        if(clients[i]->chatid == chatid){
+            //nao enviar mesmasem duplicada para o remetente
             if(clients[i]->uid != id){
 
                 //write retorna -1 caso tenha algum problema, como seria o caso de um final repentino na parte do cliente.
@@ -204,32 +212,41 @@ void retirar_cli(int id){
 //Funcao que escaneia todos as salas de chat procurando a sala com o mesmo nome,
  //se não existir, entao cria e retorna 0
  //Se existir, entao o usuario entrara nela e retornara o id da sala
- void verificar_chatroom(char nome_sala[200], CLI *cliente){
+ int verificar_chatroom(char nome_sala[200], CLI *cliente){
     pthread_mutex_lock(&climutex);
 
-    for(int i = 0; i<MAX_CHATROOM; ++i){
+    int adicionado =0;
+    int i;
+    for(i = 0; i<MAX_CHATROOM; ++i){
         //se existe a sala, entre nela
         if(strcmp(chatrooms[i]->nome,"nome_sala") == 0){
+            ++(chatrooms[i]->qtdpessoas);
             cliente->chatid = i;
-            
+            adicionado = 1;            
         }
     }
+
 
     //se a sala não existe, então procure um espaço vago e crie-a.
-       for(int i=0; i<MAX_CHATROOM; ++i){
-        //se existe a sala, entre nela
-        if(chatrooms[i] == NULL){
-            strcpy(chatrooms[i]->nome,nome_sala);
-            chatrooms[i]->qtdpessoas = 1;
-            cliente->admin = 1;                     //o usuario q criou a sala é o admin 
-            cliente->chatid = i;          
-        }
-    }
-
-
+    if(adicionado == 0){
+        for(i=0; i<MAX_CHATROOM; ++i){
+            //se existe a sala, entre nela
+            if(chatrooms[i] == NULL){
+             strcpy(chatrooms[i]->nome,nome_sala);
+                chatrooms[i]->qtdpessoas = 1;
+                cliente->admin = 1;                     //o usuario q criou a sala é o admin 
+                cliente->chatid = i;          
+             }
+        } 
+    }  
 
     pthread_mutex_unlock(&climutex);
-    return -1;
+    if(adicionado != 0){
+        return i;
+    }
+    else{
+            return -1;
+        }
 
 
  }
@@ -281,7 +298,7 @@ void retirar_cli(int id){
         sprintf(input, ITALICO "%s entrou no chat\n" RESET, cliente->name);
         
         //uid sera dado ao cliente na main.
-        send_message(input, cliente->uid);
+        send_message(input, cliente->uid, cliente->chatid);
      }
 
      //se o usuario não quiser sair, então crie uma sala ou entre em uma
@@ -290,17 +307,10 @@ void retirar_cli(int id){
         if(read(cliente->sockfd,nome_sala,200) <= 0 || strlen(nome_sala) < 2 || strlen(nome_sala) >=200){
             printf(ITALICO "Nome nao recebido/problema ao receber/nome invalido" RESET);
         }
+        //Insere o usuario na sala ou cria uma nova sala 
         else{
-            verificar_chatroom();
-            //sala ja existente
-            if(-1){
-              
-            }
-              //criar sala
-            else{}
-
+            verificar_chatroom(nome_sala, cliente);
         }
-
      }
 
     //limpamos o input. 
@@ -343,7 +353,11 @@ void retirar_cli(int id){
             else if(strcmp(input,"") == 0){
 
             }
-            //se for uma mensagem comum.
+            //se for uma mensagem comum e estiver mutado
+            else if (cliente->mutado == 1){
+                printf(ITALICO "Voce esta mutado\n" RESET);
+
+            }
             else{
                 //modelo nick: msg
                 //Logo, precisamos de mais um pouco de espaco. 
