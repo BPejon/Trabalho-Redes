@@ -100,18 +100,18 @@
                 
             }
             //se o usuario usar quit, entao acaba tudo
-            else if(strcmp(input,"/quit") == 0){
+            else if(command_interpreter(input) == 2){   //quit
                 return 0;
             }
-            else if(strcmp(input,"/ping") == 0){
-                printf(ITALICO "Voce nao esta conectado ao servidor ainda\n" RESET);
+            else if(command_interpreter(input) == 3){   //ping
+                printf(ITALICO "pong\n" RESET);
             }
-            else if(strcmp(input,"/connect") == 0){
+            else if(command_interpreter(input) == 1){   //connect
                 break;
             }
             else{
                 printf(ITALICO);
-                printf("Comando desconhecido\n");
+                printf("Voce ainda nao esta conectado!\n");
                 printf(RESET);
             }
     
@@ -129,10 +129,53 @@
             exit(1);
         }
        
-        //precisamos mandar um nome:
-        printf("Escolha um nome:");
-        input = read_line();
-        write(sockfd,input,sizeof(input));
+        //precisamos mandar um nome
+        //o usuario soh sai daqui se ele usar o comando /nickname seguido de um nome valido, ou /quit
+        char valid_name = 0;
+        while(valid_name == 0){
+            printf("Por favor, escolha um nome de usuario com o comando '/nickname apelidoDesejado'\n");
+            input = read_line();
+            //printf("%s\n", input);
+            char input_copy[sizeof(input)];
+            strcpy(input_copy, input);
+            int comando = command_interpreter(input_copy);
+            //printf("%s\n", input_copy);
+            //write(sockfd,input,sizeof(input));
+            if(comando == 5){
+                valid_name = 1;
+                char *token = strtok(NULL, " ");
+                char nome[50];  //a ideia eh copiar o token pra esse aqui
+                strcpy(nome, token);
+                printf("%s %ld\n", nome, sizeof(nome));
+                write(sockfd,nome,strlen(nome) + 1);
+            }
+            else if(comando == 2){
+                write(sockfd,input,sizeof(input));
+                return 0;
+            }
+        }
+
+        //precisamos tambem escolher um chatroom, ou criar um novo
+        char valid_chat = 0;
+        while(valid_chat == 0){
+            printf("Use o comando '/join nomeCanal' para entrar em algum canal ou criar um canal novo.\n");
+            input = read_line();
+            char input_copy[sizeof(input)];
+            strcpy(input_copy, input);
+            int comando = command_interpreter(input_copy);
+            //write(sockfd,input,sizeof(input));
+            if(comando == 4){
+                valid_chat = 1;
+                char *nome_sala = strtok(NULL, " ");
+                printf("%s\n", nome_sala);
+                write(sockfd,nome_sala,sizeof(nome_sala));
+            }
+            else if(comando == 2){
+                write(sockfd,input,sizeof(input));
+                return 0;
+            }
+        }
+        
 
         //Note que no cliente nao temos newsockfd, como temos no server. 
         //assim como fizemos no "server" fazemos no cliente para mandar e receber msgs
