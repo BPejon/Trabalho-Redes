@@ -146,7 +146,6 @@
                 char *token = strtok(NULL, " ");
                 char nome[50];  //a ideia eh copiar o token pra esse aqui
                 strcpy(nome, token);
-                printf("%s %ld\n", nome, strlen(nome));
                 write(sockfd,nome,strlen(nome) + 1);
             }
             else if(comando == 2){
@@ -169,7 +168,6 @@
                 char *token = strtok(NULL, " ");
                 char nome_sala[200];
                 strcpy(nome_sala, token);
-                printf("%s\n", nome_sala);
                 write(sockfd,nome_sala,strlen(nome_sala) + 1);
             }
             else if(comando == 2){

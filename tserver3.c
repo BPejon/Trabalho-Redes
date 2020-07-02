@@ -193,7 +193,7 @@ void retirar_cli(int id){
      //Se um pedido de acionar/deletar usuario foi feito antes, obviamente, esta mensagem nao sera mandada a ele.
      pthread_mutex_lock(&climutex);
 
-    for(int i = 0; i < MAX_CLIENTS; i++){
+    for(int i = 0; i < c_count; i++){
         //Se o cliente esta na mesma sala que o remetente
         if(clients[i]->chatid == chatid){
             //nao enviar mesmasem duplicada para o remetente
@@ -218,13 +218,10 @@ void retirar_cli(int id){
  //Se existir, entao o usuario entrara nela e retornara o id da sala
  int verificar_chatroom(char nome_sala[200], CLI *cliente, int qtd_chats){
     pthread_mutex_lock(&climutex);
-    printf("1.1\n");
 
     int adicionado =0;
     int i;
     for(i = 0; i<qtd_chats; i++){
-        printf("%d\n", strcmp(chatrooms[i]->nome,nome_sala));
-        printf("teste\n");
         //se existe a sala, entre nela
         if(strcmp(chatrooms[i]->nome,nome_sala) == 0){
             ++(chatrooms[i]->qtdpessoas);
@@ -232,7 +229,6 @@ void retirar_cli(int id){
             adicionado = 1;            
         }
     }
-    printf("2.2\n");
 
     //se a sala não existe, então procure um espaço vago e crie-a.
     if(adicionado == 0){
@@ -246,9 +242,7 @@ void retirar_cli(int id){
                 cliente->chatid = i;          
              }
         } 
-    }  
-
-    printf("3.3\n");
+    }
 
     pthread_mutex_unlock(&climutex);
 
@@ -282,8 +276,6 @@ void retirar_cli(int id){
      //quando ele veio para nos ele veio com o cast de void*, requerimento do pthread_create()
      CLI* cliente = (CLI*) arg;
 
-     printf("%d\n", cliente->chatid);
-
      //Primeira coisa que o usuario ira mandar eh o seu nome, recebemos ele agora.
      if(read(cliente->sockfd,nome,50) <=0 || strlen(nome) < 2|| strlen(nome)>=50){
          //acima checamos se recebemos um nome, ou se o nome eh muito pequeno (pois pode ser um simples " ", o que nao queremos)
@@ -301,10 +293,7 @@ void retirar_cli(int id){
         //completamos a "ficha do cliente"
         //strcpy((*cliente).name, nome);
         for(int i = 0; i < strlen(nome) + 1; i++){
-            printf("%d\n", i);
             (*cliente).name[i] = nome[i];
-            printf("%s\n", cliente->name);
-            printf("%ld\n", strlen(cliente->name));
         }
         //printf("%s\n", cliente->name);
         //O usuario recebe uma cor propria         
@@ -338,7 +327,6 @@ void retirar_cli(int id){
 
     //loop em que recebemos mensagens do user e mandamos para os outros. 
     while(sair){
-        printf("chegou aqui\n");
 
         //verifica se o usuario foi kickado
         if(cliente->kickado == 1){
