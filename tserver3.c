@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <time.h>
+#include "readline.h"
 
 //nosso servidor atendera ate 100 clientes, se assim for.
 #define MAX_CLIENTS 100
@@ -67,14 +68,6 @@ typedef struct chatroom{
 
 }CHAT;
 
-//Incializa o vertor de chatroom com valor NULL
-void inicializa_chatroom(void){
-    for(int i=0; i<MAX_CHATROOM; ++i){
-        chatrooms[i] = NULL;
-
-    }
-
-}
 //Como estamos lidando com varios clientes, temos que criar varios sockaddr_in de clientes
 //Temos quer guardar diferentes informacoes dele para poder funcionar corretamente. 
 typedef struct client{
@@ -116,6 +109,16 @@ CLI *clients[MAX_CLIENTS];
 
 //Vetor de ChatRooms
 CHAT *chatrooms[MAX_CHATROOM];
+int qtd_chats = 0;
+
+//Incializa o vetor de chatroom com valor NULL
+void inicializa_chatroom(void){
+    for(int i=0; i<MAX_CHATROOM; ++i){
+        chatrooms[i] = NULL;
+
+    }
+
+}
 
 static _Atomic unsigned int c_count = 0;
 
@@ -190,7 +193,7 @@ void retirar_cli(int id){
      //Se um pedido de acionar/deletar usuario foi feito antes, obviamente, esta mensagem nao sera mandada a ele.
      pthread_mutex_lock(&climutex);
 
-    for(int i = 0; i < MAX_CLIENTS; i++){
+    for(int i = 0; i < c_count; i++){
         //Se o cliente esta na mesma sala que o remetente
         if(clients[i]->chatid == chatid){
             //nao enviar mesmasem duplicada para o remetente
@@ -213,12 +216,12 @@ void retirar_cli(int id){
 //Funcao que escaneia todos as salas de chat procurando a sala com o mesmo nome,
  //se não existir, entao cria e retorna 0
  //Se existir, entao o usuario entrara nela e retornara o id da sala
- int verificar_chatroom(char nome_sala[200], CLI *cliente){
+ int verificar_chatroom(char nome_sala[200], CLI *cliente, int qtd_chats){
     pthread_mutex_lock(&climutex);
 
     int adicionado =0;
     int i;
-    for(i = 0; i<MAX_CHATROOM; ++i){
+    for(i = 0; i<qtd_chats; i++){
         //se existe a sala, entre nela
         if(strcmp(chatrooms[i]->nome,nome_sala) == 0){
             ++(chatrooms[i]->qtdpessoas);
@@ -227,10 +230,9 @@ void retirar_cli(int id){
         }
     }
 
-
     //se a sala não existe, então procure um espaço vago e crie-a.
     if(adicionado == 0){
-        for(i=0; i<MAX_CHATROOM; ++i){
+        for(i=0; i<qtd_chats; ++i){
             //se existe a sala, entre nela
             if(chatrooms[i] == NULL){
              strcpy(chatrooms[i]->nome,nome_sala);
@@ -240,20 +242,19 @@ void retirar_cli(int id){
                 cliente->chatid = i;          
              }
         } 
-    }  
+    }
 
     pthread_mutex_unlock(&climutex);
 
     if(adicionado != 0){
-        return i;
+        return i + 1;
     }
     else{
-            return -1;
+            return 0;
         }
 
 
  }
-
 
 //esta eh a funcao que vai quando ocorre o thread, ela e a porcao "servidor/cliente"
 //eh resposabilidade desta funcao receber os inputs (tamanho 4096) e envia-lo aos outros.
@@ -276,7 +277,7 @@ void retirar_cli(int id){
      CLI* cliente = (CLI*) arg;
 
      //Primeira coisa que o usuario ira mandar eh o seu nome, recebemos ele agora.
-     if(read(cliente->sockfd,nome,50) <=0 || strlen(nome) < 2|| strlen(nome)>=49){
+     if(read(cliente->sockfd,nome,50) <=0 || strlen(nome) < 2|| strlen(nome)>=50){
          //acima checamos se recebemos um nome, ou se o nome eh muito pequeno (pois pode ser um simples " ", o que nao queremos)
          //ou tambem se ele ficou acima do valor desejado (queremos 50 caracteres, com 2 de folga)
          //Posivelmente tratamos isto no proprio cliente. 
@@ -289,19 +290,22 @@ void retirar_cli(int id){
         }
 
      else{
-
-         //completamos a "ficha do cliente"
-         strcpy(cliente->name,nome);
-
-         //O usuario recebe uma cor propria         
-         cor_aleatoria(cor);
+        //completamos a "ficha do cliente"
+        //strcpy((*cliente).name, nome);
+        for(int i = 0; i < strlen(nome) + 1; i++){
+            (*cliente).name[i] = nome[i];
+        }
+        //printf("%s\n", cliente->name);
+        //O usuario recebe uma cor propria         
+        cor_aleatoria(cor);
 
         //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
         //nos usuarios com uma string diferente. 
         sprintf(input, ITALICO "%s entrou no chat\n" RESET, cliente->name);
         
         //uid sera dado ao cliente na main.
-        send_message(input, cliente->uid, cliente->chatid);
+        //printf("%s %d %d\n", input, cliente->uid, cliente->chatid);
+        //send_message(input, cliente->uid, cliente->chatid);
      }
 
      //se o usuario não quiser sair, então crie uma sala ou entre em uma
@@ -312,7 +316,7 @@ void retirar_cli(int id){
         }
         //Insere o usuario na sala ou cria uma nova sala 
         else{
-            verificar_chatroom(nome_sala, cliente);
+            qtd_chats = verificar_chatroom(nome_sala, cliente, qtd_chats);
         }
      }
 
@@ -324,12 +328,26 @@ void retirar_cli(int id){
     //loop em que recebemos mensagens do user e mandamos para os outros. 
     while(sair){
 
+        //verifica se o usuario foi kickado
+        if(cliente->kickado == 1){
+            char* kicked = "Voce foi kickado pelo admin.\n";
+            write(cliente->sockfd,kicked,strlen(kicked));
+            sair = 0;
+        }
+
+        //caso um usuario nao-admin tentar usar comandos de admin, ele recebera essa mensagem
+        char* not_admin = "Voce nao eh administrador do canal.\n";
+
         //funcao de ler, como visto antes, normal...
         int readv = read(cliente->sockfd,input,4096);
 
         //a funcao retorna um int dizendo quanto leu, ou se leu. 
         //Se for acima de 0, lemos algo e nao deu errado. 
         if(readv > 0){
+
+            char input_copy[4096];  //copia o input para usar no command_interpreter
+            strcpy(input_copy, input);
+            int comando = command_interpreter(input_copy);
             
             //se recebemos ping, mandamos pong de volta para o usuario. 
             if(strcmp(input,"/ping")== 0){
@@ -352,6 +370,62 @@ void retirar_cli(int id){
                 sair = 0;
             }
 
+            //comandos kick, mute, unmute e whois
+            else if(comando == 6 || comando == 7 || comando == 8 || comando == 9){
+                if(cliente->admin == 0){
+                    write(cliente->sockfd,not_admin,strlen(not_admin));
+                }
+                else{
+                    int found_user = 0; //indica se o usuario-alvo foi encontrado no chatroom
+                    strtok(input, " ");
+                    char *target_name = strtok(input, " ");
+                    //procurar nome do usuario na lista de usuarios e verificar se ele esta no chatroom
+                    for(int i = 0; i < MAX_CLIENTS; i++){
+                        if(!strcmp(clients[i]->name, target_name) && clients[i]->chatid == cliente->chatid){
+                            switch(comando)
+                            {
+                            case 6: //kick
+                                pthread_mutex_lock(&climutex);
+                                found_user = 1;
+                                clients[i]->kickado = 1;
+                                pthread_mutex_unlock(&climutex);
+                                break;
+                            
+                            case 7: //mute
+                                pthread_mutex_lock(&climutex);
+                                found_user = 1;
+                                clients[i]->mutado = 1;
+                                pthread_mutex_unlock(&climutex);
+                                break;
+                            
+                            case 8: //unmute
+                                pthread_mutex_lock(&climutex);
+                                found_user = 1;
+                                clients[i]->mutado = 0;
+                                pthread_mutex_unlock(&climutex);
+                                break;
+
+                            case 9: ;   //whois
+                                char* target_ip = inet_ntoa(clients[i]->adress.sin_addr);
+                                write(cliente->sockfd,target_ip,strlen(target_ip));
+                                found_user = 1;
+                                break;
+                            
+                            default:    //bom, isso aqui eh pra ser impossivel de acontecer
+                                break;
+                            }
+
+                            return 0;
+                        }
+                    }
+                    //se essas condicoes nao forem atendidas, avisar o admin
+                    if(found_user == 0){
+                        char* no_user = "Nao existe um usuario com esse nome nesse canal.\n";
+                        write(cliente->sockfd,no_user,strlen(no_user));
+                    }
+                }
+            }
+
             //eliminando os "vazios"
             else if(strcmp(input,"") == 0){
 
@@ -367,7 +441,7 @@ void retirar_cli(int id){
                 //Aqui entao, criamos uma nova string, e usamos o sprintf
                 char bigtext[5100];
                 sprintf(bigtext,"%s%s: %s" RESET,cor, cliente->name,input); //CHECK
-                send_message(bigtext,cliente->uid);
+                send_message(bigtext,cliente->uid, cliente->chatid);
                 //para melhor ver o server funcionando, postamos aqui tambem a mensagem. 
                 printf("%s%s\n",cor, bigtext);
             }
@@ -393,7 +467,7 @@ void retirar_cli(int id){
     sprintf(input, ITALICO "%s saiu do chat" RESET, cliente->name);
         
     //uid sera dado ao cliente na main.
-    send_message(input, cliente->uid);
+    send_message(input, cliente->uid, cliente->chatid);
 
     //mandamos a "mensagem da morte" para o usuario
     //usamos esta mensagem no ultimo cliente e, no intuito de mudar o minimo possivel, continuamos usando.   
