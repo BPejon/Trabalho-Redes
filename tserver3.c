@@ -109,6 +109,7 @@ CLI *clients[MAX_CLIENTS];
 
 //Vetor de ChatRooms
 CHAT *chatrooms[MAX_CHATROOM];
+int qtd_chats = 0;
 
 //Incializa o vetor de chatroom com valor NULL
 void inicializa_chatroom(void){
@@ -215,12 +216,15 @@ void retirar_cli(int id){
 //Funcao que escaneia todos as salas de chat procurando a sala com o mesmo nome,
  //se não existir, entao cria e retorna 0
  //Se existir, entao o usuario entrara nela e retornara o id da sala
- int verificar_chatroom(char nome_sala[200], CLI *cliente){
+ int verificar_chatroom(char nome_sala[200], CLI *cliente, int qtd_chats){
     pthread_mutex_lock(&climutex);
+    printf("1.1\n");
 
     int adicionado =0;
     int i;
-    for(i = 0; i<MAX_CHATROOM; ++i){
+    for(i = 0; i<qtd_chats; i++){
+        printf("%d\n", strcmp(chatrooms[i]->nome,nome_sala));
+        printf("teste\n");
         //se existe a sala, entre nela
         if(strcmp(chatrooms[i]->nome,nome_sala) == 0){
             ++(chatrooms[i]->qtdpessoas);
@@ -228,11 +232,11 @@ void retirar_cli(int id){
             adicionado = 1;            
         }
     }
-
+    printf("2.2\n");
 
     //se a sala não existe, então procure um espaço vago e crie-a.
     if(adicionado == 0){
-        for(i=0; i<MAX_CHATROOM; ++i){
+        for(i=0; i<qtd_chats; ++i){
             //se existe a sala, entre nela
             if(chatrooms[i] == NULL){
              strcpy(chatrooms[i]->nome,nome_sala);
@@ -244,13 +248,15 @@ void retirar_cli(int id){
         } 
     }  
 
+    printf("3.3\n");
+
     pthread_mutex_unlock(&climutex);
 
     if(adicionado != 0){
-        return i;
+        return i + 1;
     }
     else{
-            return -1;
+            return 0;
         }
 
 
@@ -276,9 +282,10 @@ void retirar_cli(int id){
      //quando ele veio para nos ele veio com o cast de void*, requerimento do pthread_create()
      CLI* cliente = (CLI*) arg;
 
+     printf("%d\n", cliente->chatid);
+
      //Primeira coisa que o usuario ira mandar eh o seu nome, recebemos ele agora.
      if(read(cliente->sockfd,nome,50) <=0 || strlen(nome) < 2|| strlen(nome)>=50){
-         printf("o nome deu errado\n");
          //acima checamos se recebemos um nome, ou se o nome eh muito pequeno (pois pode ser um simples " ", o que nao queremos)
          //ou tambem se ele ficou acima do valor desejado (queremos 50 caracteres, com 2 de folga)
          //Posivelmente tratamos isto no proprio cliente. 
@@ -291,29 +298,25 @@ void retirar_cli(int id){
         }
 
      else{
-
-         printf("o nome deu certo\n");
-         printf("%ld %ld\n", sizeof(cliente->name), sizeof(nome));
-
-
-         //completamos a "ficha do cliente"
-         strcpy(cliente->name,nome);
-         /*for(int i = 0; i < strlen(nome); i++){
-             cliente->name[i] = nome[i];
-             //printf("%s\n", cliente->name);
-             //printf("%ld\n", strlen(cliente->name));
-         }*/
-
-        printf("blz copiou certinho");
-         //O usuario recebe uma cor propria         
-         cor_aleatoria(cor);
+        //completamos a "ficha do cliente"
+        //strcpy((*cliente).name, nome);
+        for(int i = 0; i < strlen(nome) + 1; i++){
+            printf("%d\n", i);
+            (*cliente).name[i] = nome[i];
+            printf("%s\n", cliente->name);
+            printf("%ld\n", strlen(cliente->name));
+        }
+        //printf("%s\n", cliente->name);
+        //O usuario recebe uma cor propria         
+        cor_aleatoria(cor);
 
         //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
         //nos usuarios com uma string diferente. 
         sprintf(input, ITALICO "%s entrou no chat\n" RESET, cliente->name);
         
         //uid sera dado ao cliente na main.
-        send_message(input, cliente->uid, cliente->chatid);
+        //printf("%s %d %d\n", input, cliente->uid, cliente->chatid);
+        //send_message(input, cliente->uid, cliente->chatid);
      }
 
      //se o usuario não quiser sair, então crie uma sala ou entre em uma
@@ -324,7 +327,7 @@ void retirar_cli(int id){
         }
         //Insere o usuario na sala ou cria uma nova sala 
         else{
-            verificar_chatroom(nome_sala, cliente);
+            qtd_chats = verificar_chatroom(nome_sala, cliente, qtd_chats);
         }
      }
 
@@ -335,6 +338,7 @@ void retirar_cli(int id){
 
     //loop em que recebemos mensagens do user e mandamos para os outros. 
     while(sair){
+        printf("chegou aqui\n");
 
         //verifica se o usuario foi kickado
         if(cliente->kickado == 1){
