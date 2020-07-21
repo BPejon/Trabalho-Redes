@@ -11,19 +11,20 @@
 #include <signal.h>
 #include <time.h>
 #include "readline.h"
+#include <ctype.h>
 
 //nosso servidor atendera ate 100 clientes, se assim for.
 #define MAX_CLIENTS 100
+//do mesmo modo podemos ter ate 100 chat rooms.
 #define MAX_CHATROOM 100
 
 
 /*
     Como funciona o servidor:
-Basicamente, enquanto anteriormente tinhamos apenas um cliente, agora temos varios.
-Esses clientes serao guardados em uma string da struct cliente. Quando um deles manda uma
-mensagem, correremos a string mandando a tal mensagem para todos os outros que nao ele mesmo.
 
-Para cuidar da criacao/recebimento/envio de mensagem, estaremos usando threads.
+    A nova versao (3.0) se aproveita muito da versao anterior, aprofundando na questao dos comandos
+    Foi criado um novo vetor para as chatrooms alem de expandirmos o vetor de usuarios para permitir
+    os comandos/chatrooms.
 */
 
 //Reseta a cor escolhida
@@ -158,18 +159,18 @@ void adicionar_cli(CLI *cliente){
 void retirar_cli(int id, int error){
 
     //mesma ideia do anterior, tudo que modifica o vetor tem de haver um lock.
-    printf("We are here 3.1\n");
     pthread_mutex_lock(&climutex);
     int chatid;
     int i = 0;
-    printf("We are here 3.2\n");
+    
+    //como colocamos no primeiro espaco do vetor vazio
+    //podem ocorrer casos de NULLs aparecerem antes do
+    //valor que queremos retirar
     for(i; i < MAX_CLIENTS; i++)
     {
-        printf("We are here 3.3\n");
         if(clients[i]){
-            printf("We are here 3.4\n");
             if(clients[i]->uid == id){
-                printf("We are here 3.5\n");
+                
                 chatid = clients[i]->chatid;
                 clients[i] = NULL;
                 break;
@@ -179,25 +180,17 @@ void retirar_cli(int id, int error){
 
     //agora retira o usuario da sala
     //se a sala ficar vazia, entao exclua
+    //como o chat id corresponde ao vetor da sala
+    //nao eh preciso buscar, apenas indo para a posicao no vetor
     if(error){
-        printf("We are here 3.6\n");
-        printf("chatroom 0 - qtd = %d\n Chatroom we want to delete: %d", chatrooms[0]->qtdpessoas,chatid);
         if((--(chatrooms[chatid]->qtdpessoas) ) == 0){
-            printf("We are here 3.7\n");
+        
             CHAT* dummy = chatrooms[chatid];
-            printf("We are here 3.8\n");
             chatrooms[chatid] = NULL;
-            printf("We are here 3.9\n");
             free(dummy);
-
-            /*free(chatrooms[chatid]);
-            printf("We are here 3.8\n");
-            chatrooms[chatid] = NULL;
-            printf("We are here 3.9\n");*/
         }
     }
 
-    printf("We are here 3.10\n");
     pthread_mutex_unlock(&climutex);
 }
 
@@ -212,9 +205,9 @@ void retirar_cli(int id, int error){
      //Se um pedido de acionar/deletar usuario foi feito antes, obviamente, esta mensagem nao sera mandada a ele.
      pthread_mutex_lock(&climutex);
 
-    for(int i = 0; i < c_count; i++){
-        //Se o cliente esta na mesma sala que o remetente
-        if(clients[i]->chatid == chatid && clients[i]->kickado == 0){
+    for(int i = 0; i < MAX_CLIENTS; i++){
+
+        if(clients[i] != NULL && clients[i]->chatid == chatid && clients[i]->kickado == 0){
             //nao enviar mesmasem duplicada para o remetente
             if(clients[i]->uid != id){
 
@@ -251,16 +244,6 @@ void retirar_cli(int id, int error){
             }
         }
         
-        
-        /*
-        if(chatrooms[i] == NULL){
-            continue;
-        }
-        else if(strcmp(chatrooms[i]->nome,nome_sala) == 0){
-            ++(chatrooms[i]->qtdpessoas);
-            cliente->chatid = i;
-            adicionado = 1;            
-        }*/
     }
 
     //se a sala não existe, então procure um espaço vago e crie-a.
@@ -273,7 +256,7 @@ void retirar_cli(int id, int error){
                 chatrooms[i]->qtdpessoas = 1;
                 cliente->admin = 1;                     //o usuario q criou a sala é o admin 
                 cliente->chatid = i;
-                printf("Chatid = %d\n", i);
+                
                 break;
              }
         }
@@ -292,18 +275,16 @@ void retirar_cli(int id, int error){
  }
 
  //Funcoes para lidar com comandos, Ha uma funcao para cada, seja kick, mute e etc.
-//sem problemas
-//problema ocorre fora da funcao
 int kick(int chatid, char* name)
 {
-    printf("We are here 1.1\n");
+    
     int didwedoit = 0;
     pthread_mutex_lock(&climutex);
-    printf("We are here 1.2\n");
+    
 
     for(int i = 0; i < MAX_CLIENTS; i++)
     {   
-        printf("We are here 1.3\n");
+       
         //checamos se ha um cliente para comecar
         if(clients[i] != NULL)
         {   
@@ -324,7 +305,8 @@ int kick(int chatid, char* name)
     
     return didwedoit;
 }
-//sem problemas
+
+//Funcao para mutar o usuario
 int mute(int chatid, char* name)
 {
    
@@ -354,7 +336,8 @@ int mute(int chatid, char* name)
     
     return didwedoit;
 }
-//sem problemas
+
+//funcao para desmutar o usuario
 int unmute(int chatid, char* name)
 {
     
@@ -384,40 +367,65 @@ int unmute(int chatid, char* name)
     return didwedoit;
 }
 
-//Com problema, ja achei onde
+//Funcao para achar o ip do usuario
 int whois(int chatid, char* name, char* ipadress)
 {
-    printf("We are here 1.1\n");
+    
     int didwedoit = 0;
     pthread_mutex_lock(&climutex);
     
-    printf("We are here 1.2\n");
+    
     for(int i = 0; i < MAX_CLIENTS; i++)
     {   
-        printf("We are here 1.3\n");
+    
         //checamos se ha um cliente para comecar
         if(clients[i] != NULL)
         {   
-            printf("We are here 1.4\n");
+            
             //se for quem procuramos, desmutamos ele
             if(strcmp(name, clients[i]->name) == 0 && clients[i]->chatid == chatid){
-                printf("We are here 1.5\n");
-                /*Problema se encontra aqui*/  
+                
                 strcpy(ipadress,inet_ntoa(clients[i]->adress.sin_addr));
-                //ipadress = inet_ntoa(clients[i]->adress.sin_addr);
-                printf("We are here 1.6 -> %s\n",ipadress);
+                
                 didwedoit = 1;
                 break;
             }
         }
     }
 
-    printf("We are here 1.7\n");
+    
     pthread_mutex_unlock(&climutex);
-    printf("We are here 1.8\n");
+    
     return didwedoit;
 }
 
+int findclone(char* name){
+
+    pthread_mutex_lock(&climutex);
+
+    int result = 0;
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {   
+    
+        //checamos se ha um cliente para comecar
+        if(clients[i] != NULL)
+        {   
+            
+            //se ouver um nome igual, entao voltamos
+            if(strcmp(name, clients[i]->name) == 0){
+                
+                result = 1;
+
+                break;
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&climutex);
+
+    return result;
+}
 
 //esta eh a funcao que vai quando ocorre o thread, ela e a porcao "servidor/cliente"
 //eh resposabilidade desta funcao receber os inputs (tamanho 4096) e envia-lo aos outros.
@@ -441,24 +449,56 @@ int whois(int chatid, char* name, char* ipadress)
      //arg eh o cliente vindo da criacao do thread na main. Temos que dar a ele o cast de CLI de novo pois
      //quando ele veio para nos ele veio com o cast de void*, requerimento do pthread_create()
      CLI* cliente = (CLI*) arg;
-        
-     //Primeira coisa que o usuario ira mandar eh o seu nome, recebemos ele agora.
-     if(read(cliente->sockfd,nome,50) <=0 || strlen(nome) < 2|| strlen(nome)>=50){
-         //acima checamos se recebemos um nome, ou se o nome eh muito pequeno (pois pode ser um simples " ", o que nao queremos)
-         //ou tambem se ele ficou acima do valor desejado (queremos 50 caracteres, com 2 de folga)
-         //Posivelmente tratamos isto no proprio cliente. 
-         printf(ITALICO "Nome nao recebido/problema ao receber/nome invalido\n" RESET);
-         sair = 0;
-         earlyerror = 0;
-        
-     }
+     int valid_name = 0;
 
-    //Se o usuario quiser sair durante a seleção do nome
-     else if(strcmp(nome,"/quit") == 0){
+    while(!valid_name){
+        bzero(input, 4096); //limpamos o buffer, para garantir que recebemos apenas o input mais recente do usuario
+        read(cliente->sockfd,input,4096);
+        
+        char input_copy[sizeof(input)];
+        strcpy(input_copy, input);
+        int comando = command_interpreter(input_copy);
+        
+        if(comando == 5){
+            
+            //verificacao do nome do cliente
+            //aqui, usamos o input puro. o que isso significa?
+            //significa que usamos toda a string "/nickname apelidoDesejado" para fazer a verificacao
+            //por isso o primeiro char do nome esta na posicao 10
+            //e por isso estamos considerando strlen = 60, pois 60 = 50 + 10
+            if(strlen(input) > 60){
+                char* nomeinval = "Nickname Invalido\n";
+                write(cliente->sockfd,nomeinval,strlen(nomeinval));
+            }
+            else{
+                char *token = strtok(NULL, " ");
+                int isclone = findclone(token);
+                //checamos se ha alguem com esse nome
+                if(isclone){
+                    char* nomeinval = "Nickname Invalido\n";
+                    write(cliente->sockfd,nomeinval,strlen(nomeinval));
+                }
+                else{
+                    strcpy(nome, token);
+                    char* nomeval = "Nickname Valido\n";
+                    write(cliente->sockfd,nomeval,strlen(nomeval));
+                    
+                    valid_name = 1;
+                }
+            }
+        }
+        else if(comando == 2){
+            valid_name = -1;
+            earlyerror = 0;
             sair = 0;
         }
+        else{
+            char* nomeinval = "Nickname Invalido\n";
+            write(cliente->sockfd,nomeinval,strlen(nomeinval));
+        }
+    }
 
-     else{
+    if(valid_name && sair){
         //completamos a "ficha do cliente"
         //strcpy((*cliente).name, nome);
         for(int i = 0; i < strlen(nome) + 1; i++){
@@ -466,31 +506,73 @@ int whois(int chatid, char* name, char* ipadress)
         }
         //O usuario recebe uma cor propria         
         cor_aleatoria(cor);
-        
-     }
+    }
+
 
      //se o usuario não quiser sair, então crie uma sala ou entre em uma
-     if(sair != 0){
+    if(sair != 0){
         char nome_sala[200];
-        if(read(cliente->sockfd,nome_sala,200) <= 0 || strlen(nome_sala) < 2 || strlen(nome_sala) >=200){
-            printf(ITALICO "Nome nao recebido/problema ao receber/nome invalido\n" RESET);
-            sair = 0;
-            earlyerror = 0;
+        int valid_chat = 0;
+        while(!valid_chat){
+            int invalid_char = 0;
+            bzero(input, 4096); //limpamos o buffer, para garantir que recebemos apenas o input mais recente do usuario
+            read(cliente->sockfd,input,4096);
             
-        }
-        //Insere o usuario na sala ou cria uma nova sala 
-        else{
-            verificar_chatroom(nome_sala, cliente);
-        }
+            char input_copy[sizeof(input)];
+            strcpy(input_copy, input);
+            int comando = command_interpreter(input_copy);
+            
+            if(comando == 4){
+                //verificacao do nome do chatroom
+                //aqui, usamos o input puro. o que isso significa?
+                //significa que usamos toda a string "/join #nomedocanal" para fazer a verificacao
+                //por isso o primeiro char do nome do canal esta na posicao 6
+                //e por isso estamos considerando strlen = 206, pois 206 = 200 + 6
+                if((input[6] == '#' || input[6] == '&') && strlen(input) < 206){
 
+                    for(int i = 6; i < strlen(input); i++){
+                        
+                        if(input[i] == ' ' || input[i] == ',' || input[i] == '\a')
+                            invalid_char = 1;
+                    }
+                }
+                else
+                    invalid_char = 1;
+
+                //caso o nome for invalido, continuamos por aqui
+                if(invalid_char){
+                    char* chatinval = "Chatroom Invalido\n";
+                    write(cliente->sockfd,chatinval,strlen(chatinval));
+                }
+                //caso o nome for valido, seguimos para o chatroom
+                else{
+                    char *token = strtok(NULL, " ");
+                    strcpy(nome_sala, token);
+                    verificar_chatroom(nome_sala, cliente);
+                    char* chatval = "Chatroom Valido\n";
+                    write(cliente->sockfd,chatval,strlen(chatval));
+                    
+                    valid_chat = 1;
+                }
+            }
+            else if(comando == 2){
+                valid_chat = -1;
+                earlyerror = 0;
+                sair = 0;
+            }
+            else{
+                char* chatinval = "Chatroom Invalido\n";
+                write(cliente->sockfd,chatinval,strlen(chatinval));
+            }
+        }
         
-     }
+    }
 
     //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
     //nos usuarios com uma string diferente. 
     if(sair){
         sprintf(input, ITALICO "%s entrou no chat\n" RESET, cliente->name);
-            
+        printf("%s",input);
         //uid sera dado ao cliente na main.
         send_message(input, cliente->uid, cliente->chatid);
     }
@@ -501,16 +583,16 @@ int whois(int chatid, char* name, char* ipadress)
    
     //loop em que recebemos mensagens do user e mandamos para os outros. 
     while(sair){
-       
+
         //verifica se o usuario foi kickado
         if(cliente->kickado){
-            printf("We are here 2.1\n");
+         
             char* kicked = "Voce foi kickado pelo admin.\n";
             //sprintf(kicked, ITALICO "Voce foi kickado pelo admin.\n" RESET);
-            printf("We are here 2.2\n");
+            
             write(cliente->sockfd,kicked,strlen(kicked));
             sair = 0;
-            printf("We are here 2.3\n");
+            
             break;
         }
 
@@ -521,27 +603,28 @@ int whois(int chatid, char* name, char* ipadress)
 
             //funcao de ler, como visto antes, normal...
             int readv = read(cliente->sockfd,input,4096);
-            printf("readv do user %s: %d\n errcounter: %d\n", cliente->name, readv,errcounter);
+            
+            if(isspace(input[0]) || !strlen(input)){
+                
+            }
 
             //a funcao retorna um int dizendo quanto leu, ou se leu. 
             //Se for acima de 0, lemos algo e nao deu errado. 
-            if(readv > 1){
+            else if(readv > 1){
                 
-                /*printf("Value of Admin is %d/n", cliente->admin);
-                if(cliente->admin == 1)
-                {
-                    printf("This is the admin!/n");
-                }*/
                 char input_copy[4096];  //copia o input para usar no command_interpreter
                 int comando;
                 if(input != NULL){
                     strcpy(input_copy, input);
                     comando = command_interpreter(input_copy);
-                    printf("Comando = %d\n",comando);
+                    
                 }
-                
+                //eliminando os "vazios"
+                if(isspace(input[0])){
+                    
+                }
                 //se recebemos ping, mandamos pong de volta para o usuario. 
-                if(strcmp(input,"/ping")== 0){
+                else if(strcmp(input,"/ping")== 0){
                     char* pong = "pong\n";
                     int failscount = 0;
                     //temos que checar se estamos escrevendo sem problemas, se tiver problemas, temos, entao, que tirar. 
@@ -562,7 +645,7 @@ int whois(int chatid, char* name, char* ipadress)
                 }
                 else if(cliente->kickado){
                     char* kicked = "Voce foi kickado pelo admin.\n";
-                    //sprintf(kicked, ITALICO "Voce foi kickado pelo admin.\n" RESET);
+                    
                     write(cliente->sockfd,kicked,strlen(kicked));
                     sair = 0;
                 }
@@ -594,19 +677,18 @@ int whois(int chatid, char* name, char* ipadress)
                                 break;
 
                             case 9: ;   //whois
-                                printf("We are here1\n");
+                                
                                 char* target_ip;
                                 target_ip = (char*)malloc(40);
                                 found_user = whois(cliente->chatid,target_name,target_ip);
-                                printf("We are here 1.9\n");    
+                                    
                                 //parte ainda nao debugada
                                 if(found_user == 1){
-                                    printf("%s\n",target_ip);
-                                    printf("We are here 1.10\n");
+                                    
                                     write(cliente->sockfd,target_ip,strlen(target_ip));
-                                    printf("We are here 1.11\n");
+                                
                                 }
-                                printf("We are here 2\n");
+                                
                                 free(target_ip);
                                 break;
                                 
@@ -623,10 +705,6 @@ int whois(int chatid, char* name, char* ipadress)
                     }
                 }
 
-                //eliminando os "vazios"
-                else if(strcmp(input,"") == 0){
-
-                }
                 //se for uma mensagem comum e estiver mutado
                 else if (cliente->mutado == 1){
                     char* muted = "VOCE ESTA MUTADO\n";
@@ -667,7 +745,7 @@ int whois(int chatid, char* name, char* ipadress)
     //Se voce esta aqui, quer dizer que voce decidiu sair ou foi removido por problemas de conexao.
     //Se voce nao saiu antes mesmo de entrar.
     if(earlyerror){
-        printf("We are here 2.4\n");
+        
         //sprintf permite que nos "printemos" em uma string, basicamente para nao ter que dar print no server e
         //nos usuarios com uma string diferente. 
         sprintf(input, ITALICO "%s saiu do chat" RESET, cliente->name);
@@ -682,26 +760,26 @@ int whois(int chatid, char* name, char* ipadress)
        
         //mandamos a "mensagem da morte" para o usuario
         //usamos esta mensagem no ultimo cliente e, no intuito de mudar o minimo possivel, continuamos usando.   
-        printf("We are here 2.5\n");
+        
         char* ender = "Conversa Terminada X.X\n";
         write(cliente->sockfd,ender,strlen(ender));
 
        
-        printf("We are here 2.6\n");
+        
         retirar_cli(cliente->uid,earlyerror);
 
-        printf("We are here 2.7\n");   
+         
         //fechamos o file descriptor
         
         close(cliente->sockfd);
-        //libramos a memoria
-        printf("We are here 2.8\n");
+        //livramos a memoria
+        
         free(cliente);
     
     //um cliente a menos
     c_count--;
 
-    printf("We are here 2.9\n");
+    
     //nos livramos deste thread, agora nao mais necessario;
     pthread_detach(pthread_self());
     

@@ -10,17 +10,18 @@
     #include <netdb.h>
     #include <errno.h>
     #include "readline.h"
-
+    #include <ctype.h>
 
     #define RESET "\x1B[0m"
     #define ITALICO "\x1B[3m"
 
     /*
-        Versao 2.0, para o trablaho 2:
-    
-    Com o intuito de reutilizar o maximo possivel o codigo anterior, o cliente sofrera poucas modificacoes
-    Seu objetivo original de escrever mensagens e envia-las ao servidor, e de tambem mostrar mensagens que o servidor
-    traz se manteram, bastou apenas introduzir um pouco de codigo para acomodar os novos comandos.  
+        Versao 3.0, para o trabalho 3:
+        
+        Com o intuito de reutilizar o maximo possivel o codigo anterior, o cliente sofrera poucas modificacoes
+        Seu objetivo original de escrever mensagens e envia-las ao servidor, e de tambem mostrar mensagens que o servidor
+        traz se manteram, bastou apenas introduzir um pouco de codigo para acomodar os novos comandos.  
+        
     */
 
 
@@ -133,47 +134,46 @@
         //o usuario soh sai daqui se ele usar o comando /nickname seguido de um nome valido, ou /quit
         char valid_name = 0;
         while(valid_name == 0){
+            char buffer3[4096];
+            bzero(buffer3,sizeof(buffer3));
             printf("Por favor, escolha um nome de usuario com o comando '/nickname apelidoDesejado'\n");
             input = read_line();
-            //printf("%s\n", input);
-            char input_copy[sizeof(input)];
-            strcpy(input_copy, input);
-            int comando = command_interpreter(input_copy);
-            //printf("%s\n", input_copy);
-            //write(sockfd,input,sizeof(input));
-            if(comando == 5){
+            write(sockfd,input,strlen(input));
+            read(sockfd,buffer3,sizeof(buffer3) - 1);
+            printf("%s\n", buffer3);
+            if(strcmp(buffer3,"Nickname Valido\n") == 0)
                 valid_name = 1;
-                char *token = strtok(NULL, " ");
-                char nome[50];  //a ideia eh copiar o token pra esse aqui
-                strcpy(nome, token);
-                write(sockfd,nome,strlen(nome) + 1);
+            else if(strcmp(buffer3,"Conversa Terminada X.X\n") == 0)
+            {
+                printf("Voce saiu do servidor.\n");
+                exit(0);
             }
-            else if(comando == 2){
-                write(sockfd,input,sizeof(input));
-                return 0;
+            else if(strcmp(buffer3,"Nickname Invalido\n") == 0){
+                printf("Por favor, insira um nickname valido. O nickname deve conter, no maximo, 50 caracteres.\n");
             }
         }
 
         //precisamos tambem escolher um chatroom, ou criar um novo
-        char valid_chat = 0;
+        int valid_chat = 0;
         while(valid_chat == 0){
-            printf("Use o comando '/join nomeCanal' para entrar em algum canal ou criar um canal novo.\n");
+            char buffer4[4096];
+            bzero(buffer4,sizeof(buffer4));
+            printf("Use o comando '/join #nomeCanal' ou '/join &nomeCanal' para entrar em algum canal ou criar um canal novo.\n");
             input = read_line();
-            char input_copy[sizeof(input)];
-            strcpy(input_copy, input);
-            int comando = command_interpreter(input_copy);
-            //write(sockfd,input,sizeof(input));
-            if(comando == 4){
+            write(sockfd,input,strlen(input));
+            read(sockfd,buffer4,sizeof(buffer4) - 1);
+            printf("%s\n", buffer4);
+            if(strcmp(buffer4,"Chatroom Valido\n") == 0)
                 valid_chat = 1;
-                char *token = strtok(NULL, " ");
-                char nome_sala[200];
-                strcpy(nome_sala, token);
-                write(sockfd,nome_sala,strlen(nome_sala) + 1);
+            else if(strcmp(buffer4,"Conversa Terminada X.X\n") == 0)
+            {
+                printf("Voce saiu do servidor.\n");
+                exit(0);
             }
-            else if(comando == 2){
-                write(sockfd,input,sizeof(input));
-                return 0;
+            else if(strcmp(buffer4,"Chatroom Invalido\n") == 0){
+                printf("Por favor, insira um nome valido para o chatroom.\nO nome do chatroom deve conter, no maximo, 200 caracteres, começar com # ou &, e nao pode conter espacos, virgulas ou ctrl+G\n");
             }
+            
         }
         
 
@@ -196,40 +196,37 @@
 			while(1){
 				
                 //criamos input
-                input = read_line();
+                char *input2 = read_line();
 
                 char* empty = "";
                 //se nao foi nada, nada faremos
-                if(strcmp(input,empty) == 0)
+                if(isspace(input2[0]) || !strlen(input2))
                 {
                 
                 }
+                else{
+                    //se acabou a conversa
+                    if(strcmp(sair,input2) == 0)
+                    {
+                        n = write(sockfd,sair,sizeof(sair));
+                        //Envia para o processo pai sua morte
+                        exit(2);
+                    }
+                    
+                    for(int i = 0; i <= (strlen(input2)/4096); i++)
+                    {
+                        bzero(buffer,sizeof(buffer));
+                        strcpy(buffer, input2 + (i * 4097));
+                        n = write(sockfd,buffer,sizeof(buffer));
+                    }
 
-                //se acabou a conversa
-				if(strcmp(sair,input) == 0)
-				{
-					n = write(sockfd,sair,sizeof(sair));
-                    //Envia para o processo pai sua morte
-					exit(2);
-				}
-
-                //caso a mensagem ultrapasse 4096 bytes
-                for(int i = 0; i <= (strlen(input)/4096); i++)
-                {
-                    bzero(buffer,sizeof(buffer));
-                    strcpy(buffer, input + (i * 4097));
-                    n = write(sockfd,buffer,sizeof(buffer));
+                    if(n < 0)
+                    {
+                        printf("Erro ao escrever mensagem, terminando chatroom\n");
+                        exit(1);
+                    }
                 }
-
-				if(n < 0)
-				{
-					printf("Erro ao escrever mensagem, terminando chatroom\n");
-					exit(1);
-				}
-
 			}
-
-
 		}
         
         //buffer de receber mensagens
@@ -239,7 +236,6 @@
 
 
             char buffer2[4097];
-			//char *buffer2;
 			while (1)
 			{
 				bzero(buffer2,sizeof(buffer2));
@@ -255,7 +251,6 @@
                 if(pidfilho > 0){
                     exit(0);
                 }
-
 				if(n < 0)
 				{
 					printf("Erro ao receber mensagem, ou acabou a transmissao.\n Saindo...\n");
